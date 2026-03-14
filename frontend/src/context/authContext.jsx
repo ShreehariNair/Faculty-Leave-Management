@@ -45,9 +45,8 @@ export const AuthProvider = ({ children }) => {
   const uploadAvatar = async (file) => {
     const formData = new FormData();
     formData.append("avatar", file);
-    const { data } = await API.post("/users/avatar", formData, {
-      headers: { "Content-Type": "multipart/form-data" },
-    });
+
+    const { data } = await API.post("/users/avatar", formData);
     const updated = { ...user, avatar: data.avatar };
     localStorage.setItem("user", JSON.stringify(updated));
     setUser(updated);

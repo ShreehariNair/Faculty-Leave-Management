@@ -11,22 +11,22 @@ const protect = async (req, res, next) => {
       token = req.headers.authorization.split(" ")[1];
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       req.user = await User.findById(decoded.id).select("-password");
-      next();
+      return next();
     } catch (error) {
-      res.status(401).json({ message: "Not authorized, token failed" });
+      return res.status(401).json({ message: "Not authorized, token failed" });
     }
   }
-  if (!token) {
-    res.status(401).json({ message: "Not authorized, no token" });
-  }
+  return res.status(401).json({ message: "Not authorized, no token" });
 };
 
 const adminOnly = (req, res, next) => {
-  if (req.user && req.user.role === "admin") {
-    next();
-  } else {
-    res.status(403).json({ message: "Admin access required" });
-  }
+  if (req.user?.role === "admin") return next();
+  return res.status(403).json({ message: "Admin access required" });
 };
 
-module.exports = { protect, adminOnly };
+const hodOnly = (req, res, next) => {
+  if (req.user?.role === "hod") return next();
+  return res.status(403).json({ message: "HOD access required" });
+};
+
+module.exports = { protect, adminOnly, hodOnly };

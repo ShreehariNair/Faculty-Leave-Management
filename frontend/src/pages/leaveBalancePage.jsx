@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Box,
   Card,
@@ -45,7 +45,17 @@ const TYPE_ICON = {
   LWP: <WorkOff sx={{ fontSize: 18 }} />,
 };
 
-/* Academic year label */
+const BACKEND_TYPE_TO_CODE = {
+  casual: "CL",
+  medical: "ML",
+  earned: "EL",
+  compensatory: "CO",
+  onDuty: "OD",
+  special: "SP",
+  leaveWithoutPay: "LWP",
+  maternity: "MA",
+};
+
 const academicYearLabel = () => {
   const now = new Date();
   const m = now.getMonth();
@@ -68,12 +78,42 @@ const LeaveBalancePage = () => {
     Promise.all([API.get("/leaves/balance"), API.get("/leaves")])
       .then(([b, l]) => {
         setBalance(b.data);
-        setHistory(l.data.filter((lv) => lv.status === "approved"));
+        const list = Array.isArray(l.data) ? l.data : [];
+        setHistory(list.filter((lv) => lv.status === "approved"));
       })
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading)
+  const leaveRows = useMemo(() => {
+    return Object.entries(entitlements).map(([code, ent]) => {
+      const apiKey = {
+        CL: "casual",
+        ML: "medical",
+        EL: "earned",
+        CO: "compensatory",
+        OD: "onDuty",
+        SP: "special",
+        LWP: "leaveWithoutPay",
+      }[code];
+      const apiData = apiKey && balance?.[apiKey];
+      const meta = LEAVE_TYPE_META[code] || {};
+
+      return {
+        code,
+        label: ent.label,
+        total: apiData?.total ?? ent.days,
+        used: apiData?.used ?? 0,
+        remaining: apiData ? apiData.total - apiData.used : ent.days,
+        color: meta.color || "#7c3aed",
+        bg: meta.bg || "#f5f3ff",
+        emoji: meta.emoji || "📋",
+        payStatus: ent.payStatus,
+        note: ent.note,
+      };
+    });
+  }, [entitlements, balance]);
+
+  if (loading) {
     return (
       <Box
         display="flex"
@@ -84,36 +124,12 @@ const LeaveBalancePage = () => {
         <CircularProgress sx={{ color: "#7c3aed" }} />
       </Box>
     );
+  }
 
-  /* Build display rows from entitlements + API balance */
-  const leaveRows = Object.entries(entitlements).map(([code, ent]) => {
-    const apiKey = {
-      CL: "casual",
-      ML: "medical",
-      EL: "earned",
-      CO: "compensatory",
-    }[code];
-    const apiData = apiKey && balance?.[apiKey];
-    const meta = LEAVE_TYPE_META[code] || {};
-    return {
-      code,
-      label: ent.label,
-      total: apiData?.total ?? ent.days,
-      used: apiData?.used ?? 0,
-      remaining: apiData ? apiData.total - apiData.used : ent.days,
-      color: meta.color || "#7c3aed",
-      bg: meta.bg || "#f5f3ff",
-      emoji: meta.emoji || "📋",
-      payStatus: ent.payStatus,
-      note: ent.note,
-    };
-  });
-
-  const totalUsed = leaveRows.reduce((s, r) => s + r.used, 0);
+  const totalUsed = leaveRows.reduce((s, r) => s + (Number(r.used) || 0), 0);
 
   return (
     <Box sx={{ maxWidth: 860, mx: "auto" }}>
-      {/* Header */}
       <Box
         sx={{
           mb: 3,
@@ -130,7 +146,11 @@ const LeaveBalancePage = () => {
             Leave Balance
           </Typography>
           <Typography variant="body2" sx={{ color: "text.secondary", mt: 0.4 }}>
-            Academic Year {academicYearLabel()} &nbsp;·&nbsp; Aug 1 → Jul 31
+            Academic Year{" "}
+            {balance?.academicYear
+              ? `${balance.academicYear}–${String(balance.academicYear + 1).slice(2)}`
+              : academicYearLabel()}
+            &nbsp;·&nbsp; Aug 1 → Jul 31
           </Typography>
         </Box>
         <Chip
@@ -145,7 +165,6 @@ const LeaveBalancePage = () => {
         />
       </Box>
 
-      {/* Balance cards */}
       <Grid container spacing={2} sx={{ mb: 3 }}>
         {leaveRows.map((row) => {
           const pct = row.total > 0 ? (row.used / row.total) * 100 : 0;
@@ -186,11 +205,7 @@ const LeaveBalancePage = () => {
                       </Box>
                       <Box>
                         <Typography
-                          sx={{
-                            fontWeight: 700,
-                            fontSize: "0.8rem",
-                            color: "text.primary",
-                          }}
+                          sx={{ fontWeight: 700, fontSize: "0.8rem" }}
                         >
                           {row.label}
                         </Typography>
@@ -310,142 +325,6 @@ const LeaveBalancePage = () => {
         })}
       </Grid>
 
-      {/* Holiday entitlement */}
-      <Card sx={{ borderRadius: "8px", mb: 3 }}>
-        <CardContent sx={{ p: 2.5 }}>
-          <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5 }}>
-            Holiday Entitlement
-          </Typography>
-          {role === "faculty" ? (
-            <>
-              <Box
-                sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1.5 }}
-              >
-                <Box
-                  sx={{
-                    width: 48,
-                    height: 48,
-                    borderRadius: "8px",
-                    bgcolor: "#f5f3ff",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: 22,
-                  }}
-                >
-                  🏖️
-                </Box>
-                <Box>
-                  <Typography
-                    sx={{
-                      fontWeight: 800,
-                      fontSize: "1.4rem",
-                      color: "#7c3aed",
-                    }}
-                  >
-                    {holidayEnt.totalHolidayDays}
-                    <Typography
-                      component="span"
-                      sx={{
-                        fontSize: "0.8rem",
-                        color: "text.secondary",
-                        fontWeight: 500,
-                        ml: 0.5,
-                      }}
-                    >
-                      days
-                    </Typography>
-                  </Typography>
-                  <Typography
-                    sx={{ fontSize: "0.72rem", color: "text.secondary" }}
-                  >
-                    Annual faculty holiday entitlement
-                  </Typography>
-                </Box>
-              </Box>
-              <Grid container spacing={1} sx={{ mb: 1.2 }}>
-                {holidayEnt.periods.map((p) => (
-                  <Grid item xs={6} key={p.name}>
-                    <Box
-                      sx={{
-                        p: 1.2,
-                        bgcolor: "background.default",
-                        borderRadius: "8px",
-                        border: "1px solid",
-                        borderColor: "divider",
-                      }}
-                    >
-                      <Typography
-                        sx={{
-                          fontSize: "0.75rem",
-                          fontWeight: 700,
-                          color: "text.primary",
-                        }}
-                      >
-                        {p.name}
-                      </Typography>
-                      <Typography
-                        sx={{ fontSize: "0.68rem", color: "text.secondary" }}
-                      >
-                        ~{p.approxDays} days
-                      </Typography>
-                    </Box>
-                  </Grid>
-                ))}
-              </Grid>
-              <Typography
-                sx={{ fontSize: "0.68rem", color: "#f59e0b", fontWeight: 600 }}
-              >
-                ⚠ {holidayEnt.note}
-              </Typography>
-            </>
-          ) : (
-            <Grid container spacing={1}>
-              {holidayEnt.specificHolidays?.map((h) => (
-                <Grid item xs={6} key={h.name}>
-                  <Box
-                    sx={{
-                      p: 1.5,
-                      bgcolor: "background.default",
-                      borderRadius: "8px",
-                      border: "1px solid",
-                      borderColor: "divider",
-                    }}
-                  >
-                    <Typography
-                      sx={{
-                        fontSize: "0.78rem",
-                        fontWeight: 700,
-                        color: "text.primary",
-                      }}
-                    >
-                      {h.name}
-                    </Typography>
-                    <Typography
-                      sx={{
-                        fontSize: "0.7rem",
-                        color: "#7c3aed",
-                        fontWeight: 600,
-                      }}
-                    >
-                      {h.days} days
-                    </Typography>
-                  </Box>
-                </Grid>
-              ))}
-              <Grid item xs={12}>
-                <Typography
-                  sx={{ fontSize: "0.68rem", color: "text.secondary", mt: 0.5 }}
-                >
-                  {holidayEnt.note}
-                </Typography>
-              </Grid>
-            </Grid>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Public holidays */}
       <Card sx={{ borderRadius: "8px", mb: 3 }}>
         <CardContent sx={{ p: 2.5 }}>
           <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5 }}>
@@ -472,18 +351,15 @@ const LeaveBalancePage = () => {
         </CardContent>
       </Card>
 
-      {/* Approved leave history */}
       <Card sx={{ borderRadius: "8px" }}>
         <CardContent sx={{ p: 0 }}>
           <Box sx={{ px: 2.5, py: 2 }}>
-            <Typography
-              variant="subtitle1"
-              sx={{ fontWeight: 700, color: "text.primary" }}
-            >
+            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
               Approved Leaves This Academic Year
             </Typography>
           </Box>
           <Divider />
+
           {history.length === 0 ? (
             <Box sx={{ py: 5, textAlign: "center" }}>
               <Typography sx={{ color: "text.disabled", fontSize: "0.85rem" }}>
@@ -494,7 +370,7 @@ const LeaveBalancePage = () => {
             <Table size="small">
               <TableHead>
                 <TableRow sx={{ bgcolor: "background.default" }}>
-                  {["Type", "From", "To", "Days", "Status"].map((h) => (
+                  {["Type", "From", "To", "Days"].map((h) => (
                     <TableCell
                       key={h}
                       sx={{
@@ -512,7 +388,8 @@ const LeaveBalancePage = () => {
               </TableHead>
               <TableBody>
                 {history.map((lv) => {
-                  const code = lv.leaveType?.toUpperCase();
+                  const code =
+                    BACKEND_TYPE_TO_CODE[lv.leaveType] || lv.leaveType;
                   const meta = LEAVE_TYPE_META[code] || {};
                   return (
                     <TableRow key={lv._id} hover>
@@ -537,9 +414,8 @@ const LeaveBalancePage = () => {
                           <Typography
                             sx={{
                               fontSize: "0.78rem",
-                              fontWeight: 600,
+                              fontWeight: 700,
                               color: meta.color || "#7c3aed",
-                              textTransform: "uppercase",
                             }}
                           >
                             {code}
@@ -572,27 +448,10 @@ const LeaveBalancePage = () => {
                       </TableCell>
                       <TableCell>
                         <Typography
-                          sx={{
-                            fontWeight: 700,
-                            fontSize: "0.8rem",
-                            color: "text.primary",
-                          }}
+                          sx={{ fontWeight: 800, fontSize: "0.8rem" }}
                         >
-                          {lv.totalDays}d
+                          {lv.dayType === "HALF" ? "0.5" : lv.totalDays}
                         </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label="Approved"
-                          size="small"
-                          sx={{
-                            bgcolor: "#dcfce7",
-                            color: "#166534",
-                            fontWeight: 700,
-                            fontSize: "0.68rem",
-                            borderRadius: "6px",
-                          }}
-                        />
                       </TableCell>
                     </TableRow>
                   );

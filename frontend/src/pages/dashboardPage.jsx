@@ -521,6 +521,19 @@ const DashboardPage = () => {
   const [searchTx, setSearchTx] = useState("");
 
   useEffect(() => {
+    const fetchData = async () => {
+      const { data } = await API.get("/leaves");
+      setLeaves(data);
+    };
+
+    fetchData();
+
+    const handler = () => fetchData();
+    window.addEventListener("leaves:changed", handler);
+    return () => window.removeEventListener("leaves:changed", handler);
+  }, []);
+
+  useEffect(() => {
     Promise.all([
       API.get("/leaves"),
       API.get("/leaves/balance"),

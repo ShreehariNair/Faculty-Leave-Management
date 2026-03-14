@@ -40,6 +40,15 @@ const navSections = [
         path: "/",
         roles: ["faculty", "admin", "hod"],
       },
+
+      /* ✅ NEW: Faculty Directory (Admin + HOD only) */
+      {
+        label: "Faculty Directory",
+        icon: <SupervisorAccount fontSize="small" />,
+        path: "/faculty-directory",
+        roles: ["admin", "hod"],
+      },
+
       {
         label: "Apply Leave",
         icon: <EventNote fontSize="small" />,
@@ -163,6 +172,7 @@ const SideBar = ({ mobileOpen, setMobileOpen, darkMode, setDarkMode }) => {
           >
             {!avatarUrl && user?.name?.charAt(0)}
           </Avatar>
+
           <Box sx={{ flex: 1, minWidth: 0 }}>
             <Typography
               sx={{
@@ -189,6 +199,7 @@ const SideBar = ({ mobileOpen, setMobileOpen, darkMode, setDarkMode }) => {
               {user?.role}
             </Typography>
           </Box>
+
           <Chip
             label={
               user?.designation ? user.designation.split(" ")[0] : user?.role
@@ -231,6 +242,7 @@ const SideBar = ({ mobileOpen, setMobileOpen, darkMode, setDarkMode }) => {
             i.roles.includes(user?.role),
           );
           if (!visible.length) return null;
+
           return (
             <Box key={section.label} sx={{ mb: 2 }}>
               <Typography
@@ -247,14 +259,19 @@ const SideBar = ({ mobileOpen, setMobileOpen, darkMode, setDarkMode }) => {
               >
                 {section.label}
               </Typography>
+
               <List disablePadding>
                 {visible.map((item) => {
-                  const isActive = pathname === item.path;
+                  const isActive =
+                    pathname === item.path ||
+                    (item.path !== "/" && pathname.startsWith(item.path));
+
                   return (
                     <ListItem key={item.path} disablePadding sx={{ mb: 0.2 }}>
                       <ListItemButton
                         onClick={() => {
-                          navigate(item.path);
+                          if (item.path && item.path !== "#")
+                            navigate(item.path);
                           setMobileOpen(false);
                         }}
                         sx={{
@@ -440,6 +457,7 @@ const SideBar = ({ mobileOpen, setMobileOpen, darkMode, setDarkMode }) => {
       >
         {drawerContent}
       </Drawer>
+
       <Drawer
         variant="permanent"
         sx={{

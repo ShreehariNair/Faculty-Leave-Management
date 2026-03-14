@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Box,
   Card,
@@ -21,6 +21,8 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  Alert,
+  LinearProgress,
 } from "@mui/material";
 import {
   Search,
@@ -35,72 +37,117 @@ import { LEAVE_TYPE_META, STATUS_META } from "../constants/leavePolicy";
 
 const ManageLeavesPage = () => {
   const { user } = useAuth();
+
   const [leaves, setLeaves] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true); // initial page load
+  const [actionLoading, setActionLoading] = useState(false); // approve/reject/hod
+  const [error, setError] = useState("");
+
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
   const [selected, setSelected] = useState(null);
+
   const [rejectDialog, setRejectDialog] = useState({
     open: false,
     leaveId: null,
     reason: "",
   });
 
-  const fetchLeaves = async () => {
+  const fetchLeaves = async ({ showSpinner = false } = {}) => {
+    if (showSpinner) setLoading(true);
+    setError("");
     try {
       const { data } = await API.get("/leaves");
-      setLeaves(data);
-    } catch {
+      setLeaves(Array.isArray(data) ? data : []);
+    } catch (e) {
+      setError(e?.response?.data?.message || "Failed to load leaves.");
     } finally {
-      setLoading(false);
+      if (showSpinner) setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchLeaves();
+    fetchLeaves({ showSpinner: true });
   }, []);
 
-  const handleHodApprove = async (id) => {
+  // helper: merge an updated leave into the table immediately
+  const patchLeaveInState = (updatedLeave) => {
+    if (!updatedLeave?._id) return;
+    setLeaves((prev) =>
+      prev.map((l) =>
+        l._id === updatedLeave._id ? { ...l, ...updatedLeave } : l,
+      ),
+    );
+    if (selected?._id === updatedLeave._id) {
+      setSelected((prev) => (prev ? { ...prev, ...updatedLeave } : prev));
+    }
+  };
+
+  const runAction = async (fn) => {
+    setActionLoading(true);
+    setError("");
     try {
-      await API.put(`/leaves/${id}/hod-approve`);
-      fetchLeaves();
-    } catch {}
+      const updated = await fn();
+      // if API returns leave object, patch it
+      if (updated?.leave) patchLeaveInState(updated.leave);
+      // re-fetch to stay source-of-truth (and to refresh populated fields)
+      await fetchLeaves();
+    } catch (e) {
+      setError(e?.response?.data?.message || "Action failed.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleHodApprove = async (id) => {
+    await runAction(async () => {
+      const { data } = await API.put(`/leaves/${id}/hod-approve`, {
+        remarks: "",
+      });
+      return data; // expected { message, leave } in your backend
+    });
   };
 
   const handleApprove = async (id) => {
-    try {
-      await API.put(`/leaves/${id}/approve`);
-      fetchLeaves();
-    } catch {}
+    await runAction(async () => {
+      const { data } = await API.put(`/leaves/${id}/approve`, { remarks: "" });
+      return data;
+    });
   };
 
   const handleReject = async () => {
-    try {
-      await API.put(`/leaves/${rejectDialog.leaveId}/reject`, {
-        rejectionReason: rejectDialog.reason,
+    const { leaveId, reason } = rejectDialog;
+    await runAction(async () => {
+      const { data } = await API.put(`/leaves/${leaveId}/reject`, {
+        rejectionReason: reason,
       });
-      setRejectDialog({ open: false, leaveId: null, reason: "" });
-      fetchLeaves();
-    } catch {}
+      return data;
+    });
+    setRejectDialog({ open: false, leaveId: null, reason: "" });
   };
 
   const handleMlCertificate = async (id) => {
-    try {
-      await API.put(`/leaves/${id}/ml-certificate`);
-      fetchLeaves();
-    } catch {}
+    await runAction(async () => {
+      const { data } = await API.put(`/leaves/${id}/ml-certificate`);
+      return data;
+    });
   };
 
-  const filtered = leaves.filter((l) => {
-    const matchSearch =
-      !search ||
-      l.faculty?.name?.toLowerCase().includes(search.toLowerCase()) ||
-      l.leaveType?.toLowerCase().includes(search.toLowerCase());
-    const matchFilter = filter === "all" || l.status === filter;
-    return matchSearch && matchFilter;
-  });
+  const filtered = useMemo(() => {
+    return leaves.filter((l) => {
+      const matchSearch =
+        !search ||
+        l.faculty?.name?.toLowerCase().includes(search.toLowerCase()) ||
+        l.leaveType?.toLowerCase().includes(search.toLowerCase());
+      const matchFilter = filter === "all" || l.status === filter;
+      return matchSearch && matchFilter;
+    });
+  }, [leaves, search, filter]);
 
-  if (loading)
+  const canHodOrAdmin = user?.role === "hod" || user?.role === "admin";
+  const isAdmin = user?.role === "admin";
+
+  if (loading) {
     return (
       <Box
         display="flex"
@@ -111,6 +158,7 @@ const ManageLeavesPage = () => {
         <CircularProgress sx={{ color: "#7c3aed" }} />
       </Box>
     );
+  }
 
   return (
     <Box sx={{ maxWidth: 1100, mx: "auto" }}>
@@ -122,6 +170,18 @@ const ManageLeavesPage = () => {
           Two-step approval: HOD → Principal/Admin
         </Typography>
       </Box>
+
+      {actionLoading && (
+        <Box sx={{ mb: 1.5 }}>
+          <LinearProgress sx={{ borderRadius: 1 }} />
+        </Box>
+      )}
+
+      {error && (
+        <Alert severity="error" sx={{ mb: 2, borderRadius: "8px" }}>
+          {error}
+        </Alert>
+      )}
 
       {/* Filters */}
       <Card sx={{ mb: 2.5, borderRadius: "8px" }}>
@@ -156,13 +216,14 @@ const ManageLeavesPage = () => {
               sx={{ fontSize: "0.8rem", flex: 1 }}
             />
           </Box>
+
           <TextField
             select
             size="small"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
             sx={{
-              minWidth: 160,
+              minWidth: 180,
               "& .MuiOutlinedInput-root": { borderRadius: "8px" },
             }}
           >
@@ -179,30 +240,10 @@ const ManageLeavesPage = () => {
                 value={s}
                 sx={{ fontSize: "0.82rem", textTransform: "capitalize" }}
               >
-                {s === "all" ? "All Statuses" : STATUS_META[s]?.label || s}
+                {s === "all" ? "All Statuses" : STATUS_META?.[s]?.label || s}
               </MenuItem>
             ))}
           </TextField>
-          <Box sx={{ ml: "auto", display: "flex", gap: 1 }}>
-            {["pending", "hod_approved", "approved"].map((s) => {
-              const sm = STATUS_META[s];
-              const count = leaves.filter((l) => l.status === s).length;
-              return count > 0 ? (
-                <Chip
-                  key={s}
-                  label={`${count} ${sm.label}`}
-                  size="small"
-                  sx={{
-                    bgcolor: sm.bg,
-                    color: sm.color,
-                    fontWeight: 700,
-                    fontSize: "0.7rem",
-                    borderRadius: "8px",
-                  }}
-                />
-              ) : null;
-            })}
-          </Box>
         </CardContent>
       </Card>
 
@@ -236,14 +277,16 @@ const ManageLeavesPage = () => {
               ))}
             </TableRow>
           </TableHead>
+
           <TableBody>
             {filtered.map((leave) => {
-              const meta = LEAVE_TYPE_META[leave.leaveType] || {};
-              const status = STATUS_META[leave.status] || {
+              const meta = LEAVE_TYPE_META?.[leave.leaveType] || {};
+              const status = STATUS_META?.[leave.status] || {
                 label: leave.status,
                 bg: "#f1f5f9",
                 color: "#64748b",
               };
+
               return (
                 <TableRow
                   key={leave._id}
@@ -282,49 +325,31 @@ const ManageLeavesPage = () => {
                       </Box>
                     </Box>
                   </TableCell>
+
                   <TableCell>
-                    <Box
-                      sx={{ display: "flex", alignItems: "center", gap: 0.8 }}
+                    <Typography
+                      sx={{
+                        fontWeight: 700,
+                        fontSize: "0.78rem",
+                        textTransform: "capitalize",
+                      }}
                     >
-                      <Box
-                        sx={{
-                          width: 24,
-                          height: 24,
-                          borderRadius: "6px",
-                          bgcolor: meta.bg,
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          fontSize: 12,
-                        }}
-                      >
-                        {meta.emoji || "📋"}
-                      </Box>
-                      <Box>
+                      {meta.label || leave.leaveType}
+                    </Typography>
+                    {leave.mlCertificateRequired &&
+                      !leave.mlCertificateReceived && (
                         <Typography
                           sx={{
-                            fontWeight: 600,
-                            fontSize: "0.78rem",
-                            color: meta.color || "#334155",
+                            fontSize: "0.62rem",
+                            color: "#ef4444",
+                            fontWeight: 700,
                           }}
                         >
-                          {meta.code || leave.leaveType}
+                          Cert pending
                         </Typography>
-                        {leave.mlCertificateRequired &&
-                          !leave.mlCertificateReceived && (
-                            <Typography
-                              sx={{
-                                fontSize: "0.62rem",
-                                color: "#ef4444",
-                                fontWeight: 600,
-                              }}
-                            >
-                              Cert pending
-                            </Typography>
-                          )}
-                      </Box>
-                    </Box>
+                      )}
                   </TableCell>
+
                   <TableCell>
                     <Typography
                       sx={{ fontSize: "0.75rem", color: "text.secondary" }}
@@ -340,16 +365,20 @@ const ManageLeavesPage = () => {
                       })}
                     </Typography>
                   </TableCell>
+
                   <TableCell>
-                    <Typography sx={{ fontWeight: 700, fontSize: "0.82rem" }}>
-                      {leave.totalDays}d
+                    <Typography sx={{ fontWeight: 800, fontSize: "0.82rem" }}>
+                      {leave.dayType === "HALF"
+                        ? "0.5d"
+                        : `${leave.totalDays}d`}
                     </Typography>
                     <Typography
                       sx={{ fontSize: "0.65rem", color: "text.disabled" }}
                     >
-                      {leave.workingDays}w
+                      {leave.workingDays} working
                     </Typography>
                   </TableCell>
+
                   <TableCell>
                     <Typography
                       sx={{ fontSize: "0.75rem", color: "text.secondary" }}
@@ -359,6 +388,7 @@ const ManageLeavesPage = () => {
                         "—"}
                     </Typography>
                   </TableCell>
+
                   <TableCell>
                     <Chip
                       label={status.label}
@@ -372,6 +402,7 @@ const ManageLeavesPage = () => {
                       }}
                     />
                   </TableCell>
+
                   <TableCell>
                     {leave.treatAsLWP ? (
                       <Chip
@@ -393,37 +424,37 @@ const ManageLeavesPage = () => {
                       </Typography>
                     )}
                   </TableCell>
+
                   <TableCell onClick={(e) => e.stopPropagation()}>
                     <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap" }}>
-                      {/* HOD approve */}
-                      {leave.status === "pending" &&
-                        (req.user?.role === "hod" ||
-                          user?.role === "admin") && (
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            onClick={() => handleHodApprove(leave._id)}
-                            startIcon={<HowToReg sx={{ fontSize: 12 }} />}
-                            sx={{
-                              fontSize: "0.68rem",
-                              py: 0.3,
-                              px: 1,
-                              borderRadius: "6px",
-                              borderColor: "#bfdbfe",
-                              color: "#1e40af",
-                              "&:hover": { bgcolor: "#eff6ff" },
-                            }}
-                          >
-                            HOD ✓
-                          </Button>
-                        )}
-                      {/* Final approve */}
+                      {leave.status === "pending" && canHodOrAdmin && (
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          disabled={actionLoading}
+                          onClick={() => handleHodApprove(leave._id)}
+                          startIcon={<HowToReg sx={{ fontSize: 12 }} />}
+                          sx={{
+                            fontSize: "0.68rem",
+                            py: 0.3,
+                            px: 1,
+                            borderRadius: "6px",
+                            borderColor: "#bfdbfe",
+                            color: "#1e40af",
+                            "&:hover": { bgcolor: "#eff6ff" },
+                          }}
+                        >
+                          HOD ✓
+                        </Button>
+                      )}
+
                       {(leave.status === "pending" ||
                         leave.status === "hod_approved") &&
-                        user?.role === "admin" && (
+                        isAdmin && (
                           <Button
                             size="small"
                             variant="outlined"
+                            disabled={actionLoading}
                             onClick={() => handleApprove(leave._id)}
                             startIcon={<CheckCircle sx={{ fontSize: 12 }} />}
                             sx={{
@@ -439,12 +470,13 @@ const ManageLeavesPage = () => {
                             Approve
                           </Button>
                         )}
-                      {/* Reject */}
+
                       {["pending", "hod_approved"].includes(leave.status) &&
                         user?.role !== "faculty" && (
                           <Button
                             size="small"
                             variant="outlined"
+                            disabled={actionLoading}
                             onClick={() =>
                               setRejectDialog({
                                 open: true,
@@ -466,7 +498,7 @@ const ManageLeavesPage = () => {
                             Reject
                           </Button>
                         )}
-                      {/* ML certificate */}
+
                       {leave.leaveType === "medical" &&
                         leave.status === "approved" &&
                         leave.mlCertificateRequired &&
@@ -475,6 +507,7 @@ const ManageLeavesPage = () => {
                           <Button
                             size="small"
                             variant="outlined"
+                            disabled={actionLoading}
                             onClick={() => handleMlCertificate(leave._id)}
                             startIcon={<Info sx={{ fontSize: 12 }} />}
                             sx={{
@@ -495,6 +528,7 @@ const ManageLeavesPage = () => {
                 </TableRow>
               );
             })}
+
             {filtered.length === 0 && (
               <TableRow>
                 <TableCell
@@ -509,102 +543,6 @@ const ManageLeavesPage = () => {
           </TableBody>
         </Table>
       </Card>
-
-      {/* Detail dialog */}
-      <Dialog
-        open={Boolean(selected)}
-        onClose={() => setSelected(null)}
-        PaperProps={{ sx: { borderRadius: "8px", minWidth: 420 } }}
-      >
-        {selected && (
-          <>
-            <DialogTitle sx={{ fontWeight: 800, pb: 0 }}>
-              Leave Details
-            </DialogTitle>
-            <DialogContent sx={{ pt: 1.5 }}>
-              <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                {[
-                  ["Faculty", selected.faculty?.name],
-                  ["Department", selected.faculty?.department],
-                  [
-                    "Leave Type",
-                    LEAVE_TYPE_META[selected.leaveType]?.label ||
-                      selected.leaveType,
-                  ],
-                  ["From", new Date(selected.startDate).toDateString()],
-                  ["To", new Date(selected.endDate).toDateString()],
-                  [
-                    "Total Days",
-                    `${selected.totalDays} (${selected.workingDays} working)`,
-                  ],
-                  ["Reason", selected.reason],
-                  [
-                    "Substitute",
-                    selected.substituteAssigned?.name ||
-                      selected.substituteRequested ||
-                      "—",
-                  ],
-                  [
-                    "Advance Notice",
-                    `${selected.advanceNoticeDays} working days`,
-                  ],
-                  ["Treat as LWP", selected.treatAsLWP ? "⚠ Yes" : "No"],
-                  [
-                    "ML Certificate",
-                    selected.mlCertificateRequired
-                      ? selected.mlCertificateReceived
-                        ? "✅ Received"
-                        : "⏳ Pending"
-                      : "N/A",
-                  ],
-                  [
-                    "HOD Approval",
-                    selected.hodApproval?.approvedBy
-                      ? `✅ ${new Date(selected.hodApproval.approvalDate).toDateString()}`
-                      : "Pending",
-                  ],
-                  [
-                    "Principal Approval",
-                    selected.principalApproval?.approvedBy
-                      ? `✅ ${new Date(selected.principalApproval.approvalDate).toDateString()}`
-                      : "Pending",
-                  ],
-                ].map(([label, value]) => (
-                  <Box key={label} sx={{ display: "flex", gap: 1 }}>
-                    <Typography
-                      sx={{
-                        fontSize: "0.75rem",
-                        color: "text.disabled",
-                        fontWeight: 600,
-                        minWidth: 140,
-                      }}
-                    >
-                      {label}
-                    </Typography>
-                    <Typography
-                      sx={{
-                        fontSize: "0.78rem",
-                        color: "text.primary",
-                        fontWeight: 500,
-                      }}
-                    >
-                      {value}
-                    </Typography>
-                  </Box>
-                ))}
-              </Box>
-            </DialogContent>
-            <DialogActions sx={{ px: 3, pb: 2 }}>
-              <Button
-                onClick={() => setSelected(null)}
-                sx={{ borderRadius: "8px", color: "text.secondary" }}
-              >
-                Close
-              </Button>
-            </DialogActions>
-          </>
-        )}
-      </Dialog>
 
       {/* Reject dialog */}
       <Dialog
@@ -640,6 +578,7 @@ const ManageLeavesPage = () => {
           <Button
             variant="contained"
             onClick={handleReject}
+            disabled={actionLoading || !rejectDialog.reason.trim()}
             sx={{
               borderRadius: "8px",
               bgcolor: "#ef4444",
@@ -650,6 +589,33 @@ const ManageLeavesPage = () => {
             Reject
           </Button>
         </DialogActions>
+      </Dialog>
+
+      {/* Leave details dialog (optional) */}
+      <Dialog
+        open={Boolean(selected)}
+        onClose={() => setSelected(null)}
+        PaperProps={{ sx: { borderRadius: "8px", minWidth: 420 } }}
+      >
+        {selected && (
+          <>
+            <DialogTitle sx={{ fontWeight: 800, pb: 0 }}>
+              Leave Details
+            </DialogTitle>
+            <DialogContent sx={{ pt: 1.5 }}>
+              <Typography sx={{ fontSize: "0.85rem", fontWeight: 700, mb: 1 }}>
+                {selected.faculty?.name} · {selected.faculty?.department}
+              </Typography>
+              <Divider sx={{ mb: 1.5 }} />
+              <Typography sx={{ fontSize: "0.8rem", color: "text.secondary" }}>
+                {selected.reason}
+              </Typography>
+            </DialogContent>
+            <DialogActions sx={{ px: 3, pb: 2 }}>
+              <Button onClick={() => setSelected(null)}>Close</Button>
+            </DialogActions>
+          </>
+        )}
       </Dialog>
     </Box>
   );

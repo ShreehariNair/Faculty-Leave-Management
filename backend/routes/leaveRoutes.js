@@ -1,10 +1,13 @@
 const express = require("express");
 const router = express.Router();
+
 const Leave = require("../models/leaveModel");
 const LeaveBalance = require("../models/leaveBalanceModel");
 const User = require("../models/userModel");
 const Notification = require("../models/notificationModel");
 const { protect } = require("../middleware/auth");
+const upload = require("../middleware/leaveUpload");
+
 const {
   suggestSubstitutes,
   analyzeWorkloadImpact,
@@ -16,21 +19,33 @@ const {
 /* ─── constants ──────────────────────────────────────────────── */
 const ADVANCE_NOTICE_EXEMPT = ["casual", "medical"];
 const ADVANCE_NOTICE_DAYS = 4; // working days
-const EL_ACCRUAL_FRACTION = 1 / 3; // 1 EL day per 3 detention days
+const EL_ACCRUAL_FRACTION = 1 / 3;
 const ML_CERTIFICATE_REQUIRED = true;
 
-/* ─── helpers ────────────────────────────────────────────────── */
-const calcCalendarDays = (start, end) =>
-  Math.round((new Date(end) - new Date(start)) / (1000 * 60 * 60 * 24)) + 1;
+/* Leaves whose balance is tracked */
+const TRACKED_LEAVE_TYPES = ["casual", "medical"];
 
-const calcWorkingDays = (start, end) => {
-  let count = 0;
-  const cur = new Date(start);
-  while (cur <= new Date(end)) {
-    if (cur.getDay() !== 0) count++;
-    cur.setDate(cur.getDate() + 1);
+/* helpers */
+const toBool = (v) => v === true || v === "true";
+const toNum = (v, fallback = 0) => {
+  if (v === undefined || v === null || v === "") return fallback;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+};
+const toArray = (v) => {
+  if (Array.isArray(v)) return v;
+  if (typeof v !== "string") return [];
+  const s = v.trim();
+  if (!s) return [];
+  try {
+    const parsed = JSON.parse(s);
+    return Array.isArray(parsed) ? parsed : [String(parsed)];
+  } catch {
+    return s
+      .split(",")
+      .map((x) => x.trim())
+      .filter(Boolean);
   }
-  return count;
 };
 
 const workingDaysUntil = (targetDate) => {
@@ -39,17 +54,22 @@ const workingDaysUntil = (targetDate) => {
   const target = new Date(targetDate);
   target.setHours(0, 0, 0, 0);
   if (target <= today) return 0;
+
   let count = 0;
   const d = new Date(today);
   while (d < target) {
     d.setDate(d.getDate() + 1);
-    if (d.getDay() !== 0 && d.getDay() !== 6) count++;
+    if (d.getDay() !== 0 && d.getDay() !== 6) count++; // Mon–Fri
   }
   return count;
 };
 
-/* Leaves whose balance is tracked (has a capped total) */
-const TRACKED_LEAVE_TYPES = ["casual", "medical"];
+const getDeductionDays = (leave) => {
+  // Policy: CL can be half-day; deduct 0.5 in that case.
+  if (leave.leaveType === "casual" && leave.dayType === "HALF") return 0.5;
+  // Default: deduct workingDays if present, else totalDays
+  return leave.workingDays || leave.totalDays;
+};
 
 /* ─────────────────────────────────────────────────────────────
    GET /api/leaves
@@ -75,9 +95,7 @@ router.get("/", protect, async (req, res) => {
    ───────────────────────────────────────────────────────────── */
 router.get("/balance", protect, async (req, res) => {
   try {
-    let balance = await LeaveBalance.findOne({ faculty: req.user._id });
-    if (!balance)
-      balance = await LeaveBalance.create({ faculty: req.user._id });
+    const balance = await LeaveBalance.getOrCreateForUser(req.user._id);
     res.json(balance);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -86,7 +104,7 @@ router.get("/balance", protect, async (req, res) => {
 
 /* ─────────────────────────────────────────────────────────────
    GET /api/leaves/ai-insights
-   ───────────────────────────────────────────────────────────── */
+   ──────────────���────────────────────────────────────────────── */
 router.get("/ai-insights", protect, async (req, res) => {
   try {
     const leaveHistory = await Leave.find({
@@ -95,6 +113,7 @@ router.get("/ai-insights", protect, async (req, res) => {
     });
     const currentLeaves = await Leave.find({ status: "pending" });
     const allLeaves = await Leave.find({ status: "approved" });
+
     res.json({
       riskScore: predictLeaveRisk(leaveHistory),
       recommendations: generateRecommendations(
@@ -123,86 +142,130 @@ router.get("/substitutes", protect, async (req, res) => {
 });
 
 /* ─────────────────────────────────────────────────────────────
-   POST /api/leaves  — Apply for leave
+   POST /api/leaves — Apply for leave (JSON or multipart)
+   attachment field: "attachment"
    ───────────────────────────────────────────────────────────── */
-router.post("/", protect, async (req, res) => {
+router.post("/", protect, upload.single("attachment"), async (req, res) => {
   try {
-    const {
-      leaveType,
-      startDate,
-      endDate,
-      reason,
-      substituteRequested,
-      affectedClasses,
-      isUrgent,
-      elDetentionDays,
-      coHolidaysWorked,
-      isDuringExamPeriod,
-      isDuringTeaching,
-    } = req.body;
+    const leaveType = req.body.leaveType;
+    const startDateRaw = req.body.startDate;
+    const endDateRaw = req.body.endDate;
+    const reason = req.body.reason;
 
-    /* ── Validate leave type exists for role ── */
-    const userRole = req.user.role;
-    const adminOnly = ["compensatory"];
-    if (adminOnly.includes(leaveType) && userRole === "faculty") {
-      return res
-        .status(400)
-        .json({
-          message:
-            "Compensatory Leave is only applicable to administrative and supporting staff.",
-        });
+    const dayType = req.body.dayType || "FULL";
+    const halfSession =
+      dayType === "HALF" ? req.body.halfSession || "FN" : null;
+
+    const substituteRequested = req.body.substituteRequested || "";
+    const affectedClasses = toArray(req.body.affectedClasses);
+
+    const isUrgent = toBool(req.body.isUrgent);
+    const elDetentionDays = toNum(req.body.elDetentionDays, 0);
+    const coHolidaysWorked = toNum(req.body.coHolidaysWorked, 0);
+    const isDuringExamPeriod = toBool(req.body.isDuringExamPeriod);
+    const isDuringTeaching = toBool(req.body.isDuringTeaching);
+
+    if (!leaveType || !startDateRaw || !endDateRaw || !reason) {
+      return res.status(400).json({
+        message: "leaveType, startDate, endDate and reason are required.",
+      });
     }
 
-    /* ── Advance notice check ── */
-    const advanceDays = workingDaysUntil(startDate);
+    if (!Leave.LEAVE_TYPES.includes(leaveType)) {
+      return res.status(400).json({
+        message: `Invalid leaveType. Allowed: ${Leave.LEAVE_TYPES.join(", ")}`,
+      });
+    }
+
+    const sd = new Date(startDateRaw);
+    const ed = new Date(endDateRaw);
+    if (Number.isNaN(sd.getTime()) || Number.isNaN(ed.getTime())) {
+      return res.status(400).json({ message: "Invalid startDate or endDate." });
+    }
+    if (ed < sd) {
+      return res
+        .status(400)
+        .json({ message: "endDate cannot be before startDate." });
+    }
+
+    // CO restriction (you already had)
+    const adminOnly = ["compensatory"];
+    if (adminOnly.includes(leaveType) && req.user.role === "faculty") {
+      return res.status(400).json({
+        message:
+          "Compensatory Leave is only applicable to administrative and supporting staff.",
+      });
+    }
+
+    // Half-day only CL and same date
+    if (dayType === "HALF") {
+      if (leaveType !== "casual") {
+        return res
+          .status(400)
+          .json({ message: "Half-day is allowed only for Casual Leave." });
+      }
+      if (sd.toDateString() !== ed.toDateString()) {
+        return res
+          .status(400)
+          .json({ message: "Half-day leave must be for a single date." });
+      }
+    }
+
+    // CL max 3 continuous (sandwich counted)
+    if (leaveType === "casual") {
+      Leave.validateCasualMaxContinuous(sd, ed, dayType);
+    }
+
+    // advance notice -> treat as LWP except CL/ML
+    const advanceDays = workingDaysUntil(sd);
     const treatAsLWP =
       !ADVANCE_NOTICE_EXEMPT.includes(leaveType) &&
       advanceDays < ADVANCE_NOTICE_DAYS;
 
-    /* ── Calculate days ── */
-    const totalDays = calcCalendarDays(startDate, endDate);
-    const wDays = calcWorkingDays(startDate, endDate);
+    const totalDays = Leave.calcCalendarDays(sd, ed);
+    const workingDays = Leave.calcWorkingDays(sd, ed);
 
-    /* ── EL accrual: total = floor(detentionDays / 3) ── */
-    if (leaveType === "earned" && elDetentionDays) {
-      const earnedDays = Math.floor(elDetentionDays * EL_ACCRUAL_FRACTION);
-      const balance = await LeaveBalance.findOne({ faculty: req.user._id });
-      if (balance) {
-        balance.earned.total += earnedDays;
-        await balance.save();
-      }
+    // ML certificate rules
+    const mlCertificateRequired =
+      leaveType === "medical" && ML_CERTIFICATE_REQUIRED;
+    const fitnessCertificateRequired =
+      leaveType === "medical" && totalDays >= 3;
+
+    if (req.file && leaveType !== "medical") {
+      return res
+        .status(400)
+        .json({
+          message: "Attachment upload is only allowed for medical leave.",
+        });
+    }
+    if (mlCertificateRequired && !req.file) {
+      return res.status(400).json({
+        message: "Medical leave requires uploading a certificate (attachment).",
+      });
     }
 
-    /* ── CO: accrue equal days worked on holidays ── */
-    if (leaveType === "compensatory" && coHolidaysWorked) {
-      const balance = await LeaveBalance.findOne({ faculty: req.user._id });
-      if (balance) {
-        balance.compensatory.total += coHolidaysWorked;
-        await balance.save();
-      }
-    }
-
-    /* ── Balance check for tracked leave types ── */
+    // balance check for tracked leave
     if (TRACKED_LEAVE_TYPES.includes(leaveType)) {
-      const balance = await LeaveBalance.findOne({ faculty: req.user._id });
+      const balance = await LeaveBalance.getOrCreateForUser(req.user._id);
       const balKey = Leave.BALANCE_KEY_MAP[leaveType];
-      if (balance?.[balKey]) {
-        const remaining = balance[balKey].total - balance[balKey].used;
-        if (wDays > remaining) {
-          return res.status(400).json({
-            message:
-              `Insufficient ${leaveType} leave. Available: ${remaining} day(s). ` +
-              `Excess days will be treated as Leave Without Pay.`,
-            remaining,
-          });
-        }
+
+      const requested =
+        leaveType === "casual" && dayType === "HALF" ? 0.5 : workingDays;
+      const remaining = balance?.[balKey]
+        ? balance[balKey].total - balance[balKey].used
+        : null;
+
+      if (remaining !== null && requested > remaining) {
+        return res.status(400).json({
+          message:
+            `Insufficient ${leaveType} leave. Available: ${remaining} day(s). ` +
+            `Excess days may be treated as Leave Without Pay.`,
+          remaining,
+        });
       }
     }
 
-    /* ── SP: no salary — just flag it ── */
-    /* ── LWP: deduct salary — just flag it ── */
-
-    /* ── Substitute auto-suggest ── */
+    // substitute auto-suggest
     const availableFaculty = await User.find({
       isAvailable: true,
       role: "faculty",
@@ -214,29 +277,45 @@ router.post("/", protect, async (req, res) => {
     const leave = await Leave.create({
       faculty: req.user._id,
       leaveType,
-      startDate,
-      endDate,
+
+      startDate: sd,
+      endDate: ed,
+
       totalDays,
-      workingDays: wDays,
+      workingDays,
+      sandwichCountedDays: totalDays,
+
+      dayType,
+      halfSession,
+
       reason,
       treatAsLWP,
       advanceNoticeDays: advanceDays,
-      substituteRequested: substituteRequested || "",
+
+      substituteRequested,
       substituteAssigned: autoSub,
+
       affectedClasses: affectedClasses || [],
       isUrgent: isUrgent || false,
       isDuringExamPeriod: isDuringExamPeriod || false,
       isDuringTeaching: isDuringTeaching || false,
+
       elDetentionDays: elDetentionDays || 0,
       coHolidaysWorked: coHolidaysWorked || 0,
-      mlCertificateRequired: leaveType === "medical" && ML_CERTIFICATE_REQUIRED,
+
+      mlCertificateRequired,
+      mlCertificateReceived: false,
+      mlCertificateAttachment: req.file
+        ? `/uploads/leave-attachments/${req.file.filename}`
+        : null,
+      fitnessCertificateRequired,
+
       aiPredictionScore: predictLeaveRisk(history),
     });
 
-    /* ── Notify HOD and Admin ── */
     const admins = await User.find({ role: { $in: ["admin", "hod"] } });
     const lwpNote = treatAsLWP
-      ? " ⚠ Insufficient advance notice — may be treated as LWP."
+      ? " ⚠ Notice < 4 working days — may be treated as LWP."
       : "";
     await Notification.insertMany(
       admins.map((admin) => ({
@@ -245,8 +324,7 @@ router.post("/", protect, async (req, res) => {
         type: "leave_applied",
         message:
           `${req.user.name} applied for ${leaveType} leave ` +
-          `(${new Date(startDate).toDateString()} → ${new Date(endDate).toDateString()}, ` +
-          `${totalDays} day(s)).${lwpNote}`,
+          `(${sd.toDateString()} → ${ed.toDateString()}, ${totalDays} day(s)).${lwpNote}`,
         relatedLeave: leave._id,
       })),
     );
@@ -257,13 +335,13 @@ router.post("/", protect, async (req, res) => {
 
     res.status(201).json(populated);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(err.statusCode || 500).json({ message: err.message });
   }
 });
 
 /* ─────────────────────────────────────────────────────────────
-   PUT /api/leaves/:id/hod-approve   — Step 1: HOD approval
-   ─────────────────────────────────────���─────────────────────── */
+   PUT /api/leaves/:id/hod-approve
+   ───────────────────────────────────────────────────────────── */
 router.put("/:id/hod-approve", protect, async (req, res) => {
   try {
     if (req.user.role !== "hod" && req.user.role !== "admin")
@@ -282,7 +360,6 @@ router.put("/:id/hod-approve", protect, async (req, res) => {
     };
     await leave.save();
 
-    /* Notify Principal/Admin for final approval */
     const principals = await User.find({ role: "admin" });
     await Notification.insertMany(
       principals.map((p) => ({
@@ -294,7 +371,6 @@ router.put("/:id/hod-approve", protect, async (req, res) => {
       })),
     );
 
-    /* Notify applicant */
     await Notification.create({
       recipient: leave.faculty._id,
       sender: req.user._id,
@@ -310,7 +386,8 @@ router.put("/:id/hod-approve", protect, async (req, res) => {
 });
 
 /* ─────────────────────────────────────────────────────────────
-   PUT /api/leaves/:id/approve   — Step 2: Principal/Admin final approval
+   PUT /api/leaves/:id/approve (Principal/Admin final)
+   Deduct leave balance here (policy)
    ───────────────────────────────────────────────────────────── */
 router.put("/:id/approve", protect, async (req, res) => {
   try {
@@ -320,13 +397,11 @@ router.put("/:id/approve", protect, async (req, res) => {
     const leave = await Leave.findById(req.params.id).populate("faculty");
     if (!leave) return res.status(404).json({ message: "Leave not found" });
 
-    /* Must be HOD-approved first (unless admin fast-tracks) */
-    if (leave.status !== "hod_approved" && leave.status !== "pending")
-      return res
-        .status(400)
-        .json({
-          message: "Leave must be HOD-approved before principal approval",
-        });
+    if (leave.status !== "hod_approved" && leave.status !== "pending") {
+      return res.status(400).json({
+        message: "Leave must be HOD-approved before principal approval",
+      });
+    }
 
     leave.status = "approved";
     leave.principalApproval = {
@@ -336,116 +411,31 @@ router.put("/:id/approve", protect, async (req, res) => {
     };
     await leave.save();
 
-    /* Deduct from balance for tracked leave types */
+    // ✅ Deduct balance for tracked leave types
     const balKey = Leave.BALANCE_KEY_MAP[leave.leaveType];
-    if (balKey) {
-      const balance = await LeaveBalance.findOne({
-        faculty: leave.faculty._id,
-      });
+    if (balKey && TRACKED_LEAVE_TYPES.includes(leave.leaveType)) {
+      const balance = await LeaveBalance.getOrCreateForUser(leave.faculty._id);
+      const deduction = getDeductionDays(leave);
+
       if (balance?.[balKey]) {
-        balance[balKey].used += leave.workingDays || leave.totalDays;
+        balance[balKey].used += deduction;
         await balance.save();
       }
     }
 
-    /* Notify applicant */
     const lwpNote = leave.treatAsLWP
-      ? " Note: Insufficient advance notice — this may be processed as Leave Without Pay."
+      ? " Note: Notice < 4 working days — this may be processed as Leave Without Pay."
       : "";
+
     await Notification.create({
       recipient: leave.faculty._id,
       sender: req.user._id,
       type: "leave_approved",
-      message: `Your ${leave.leaveType} leave (${leave.totalDays} day(s)) has been fully approved by ${req.user.name}.${lwpNote}`,
+      message: `Your ${leave.leaveType} leave has been fully approved by ${req.user.name}.${lwpNote}`,
       relatedLeave: leave._id,
     });
 
     res.json({ message: "Leave approved", leave });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
-
-/* ─────────────────────────────────────────────────────────────
-   PUT /api/leaves/:id/reject
-   ───────────────────────────────────────────────────────────── */
-router.put("/:id/reject", protect, async (req, res) => {
-  try {
-    if (req.user.role === "faculty")
-      return res.status(403).json({ message: "Not authorized" });
-
-    const leave = await Leave.findById(req.params.id).populate("faculty");
-    if (!leave) return res.status(404).json({ message: "Leave not found" });
-
-    leave.status = "rejected";
-    leave.rejectionReason = req.body.rejectionReason || "Not specified";
-    await leave.save();
-
-    await Notification.create({
-      recipient: leave.faculty._id,
-      sender: req.user._id,
-      type: "leave_rejected",
-      message: `Your ${leave.leaveType} leave was rejected by ${req.user.name}. Reason: ${leave.rejectionReason}`,
-      relatedLeave: leave._id,
-    });
-
-    res.json({ message: "Leave rejected", leave });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
-
-/* ─────────────────────────────────────────────────────────────
-   PUT /api/leaves/:id/cancel
-   ───────────────────────────────────────────────────────────── */
-router.put("/:id/cancel", protect, async (req, res) => {
-  try {
-    const leave = await Leave.findById(req.params.id);
-    if (!leave) return res.status(404).json({ message: "Leave not found" });
-    if (leave.faculty.toString() !== req.user._id.toString())
-      return res.status(403).json({ message: "Not authorized" });
-    if (!["pending", "hod_approved"].includes(leave.status))
-      return res
-        .status(400)
-        .json({
-          message: "Only pending or HOD-approved leaves can be cancelled",
-        });
-
-    leave.status = "cancelled";
-    await leave.save();
-    res.json({ message: "Leave cancelled", leave });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
-
-/* ──────────────────────────────────────────────────────���──────
-   PUT /api/leaves/:id/ml-certificate
-   Mark ML certificate as received on return
-   ───────────────────────────────────────────────────────────── */
-router.put("/:id/ml-certificate", protect, async (req, res) => {
-  try {
-    if (req.user.role === "faculty")
-      return res.status(403).json({ message: "Not authorized" });
-
-    const leave = await Leave.findById(req.params.id);
-    if (!leave) return res.status(404).json({ message: "Leave not found" });
-    if (leave.leaveType !== "medical")
-      return res
-        .status(400)
-        .json({ message: "Only applicable to medical leave" });
-
-    leave.mlCertificateReceived = true;
-    await leave.save();
-
-    /* Update balance record too */
-    const balance = await LeaveBalance.findOne({ faculty: leave.faculty });
-    if (balance) {
-      balance.mlCertificateSubmitted = true;
-      await balance.save();
-    }
-
-    res.json({ message: "ML certificate marked as received", leave });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

@@ -1,8 +1,9 @@
-import React, { useState } from "react";
+import React from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider, CssBaseline, Box } from "@mui/material";
 import { createTheme } from "@mui/material/styles";
 import { AuthProvider, useAuth } from "./context/authContext";
+
 import loginPage from "./pages/loginPage";
 import dashboardPage from "./pages/dashboardPage";
 import applyLeavePage from "./pages/applyLeavePage";
@@ -10,6 +11,10 @@ import manageLeavesPage from "./pages/manageLeavesPage";
 import leaveBalancePage from "./pages/leaveBalancePage";
 import substitutePage from "./pages/substitutePage";
 import profilePage from "./pages/profilePage";
+
+/* ✅ ADD THIS IMPORT */
+import facultyDirectoryPage from "./pages/facultyDirectoryPage";
+
 import SideBar from "./components/layout/sideBar";
 import NavBar from "./components/layout/navBar";
 
@@ -122,6 +127,7 @@ const ProtectedLayout = ({ children }) => {
   const { user } = useAuth();
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const [darkMode, setDarkMode] = React.useState(false);
+
   if (!user) return <Navigate to="/login" replace />;
 
   return (
@@ -158,6 +164,14 @@ const ProtectedLayout = ({ children }) => {
   );
 };
 
+/* ✅ OPTIONAL: role guard component (recommended) */
+const RoleGuard = ({ allow, children }) => {
+  const { user } = useAuth();
+  if (!user) return <Navigate to="/login" replace />;
+  if (!allow.includes(user.role)) return <Navigate to="/" replace />;
+  return children;
+};
+
 const AppRoutes = () => {
   const { user } = useAuth();
   const LoginPage = loginPage;
@@ -168,12 +182,16 @@ const AppRoutes = () => {
   const SubstitutePage = substitutePage;
   const ProfilePage = profilePage;
 
+  /* ✅ ADD THIS */
+  const FacultyDirectoryPage = facultyDirectoryPage;
+
   return (
     <Routes>
       <Route
         path="/login"
         element={user ? <Navigate to="/" replace /> : <LoginPage />}
       />
+
       <Route
         path="/"
         element={
@@ -222,6 +240,19 @@ const AppRoutes = () => {
           </ProtectedLayout>
         }
       />
+
+      {/* ✅ ADD THIS ROUTE */}
+      <Route
+        path="/faculty-directory"
+        element={
+          <ProtectedLayout>
+            <RoleGuard allow={["admin", "hod"]}>
+              <FacultyDirectoryPage />
+            </RoleGuard>
+          </ProtectedLayout>
+        }
+      />
+
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

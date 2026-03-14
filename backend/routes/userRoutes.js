@@ -1,61 +1,10 @@
 const express = require("express");
 const router = express.Router();
-const path = require("path");
-const fs = require("fs");
 const User = require("../models/userModel");
 const { protect } = require("../middleware/auth");
+const path = require("path");
+const fs = require("fs");
 const upload = require("../middleware/upload");
-
-/* ── GET /api/users — all users ── */
-router.get("/", protect, async (req, res) => {
-  try {
-    const users = await User.find({}).select("-password").sort({ name: 1 });
-    res.json(users);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
-/* ── GET /api/users/available ── */
-router.get("/available", protect, async (req, res) => {
-  try {
-    const users = await User.find({ isAvailable: true, role: "faculty" })
-      .select("-password")
-      .sort({ name: 1 });
-    res.json(users);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
-/* ── PUT /api/users/profile — update profile text fields ── */
-router.put("/profile", protect, async (req, res) => {
-  try {
-    const user = await User.findById(req.user._id);
-    if (!user) return res.status(404).json({ message: "User not found" });
-    const { name, phone, designation, subjects } = req.body;
-    user.name = name || user.name;
-    user.phone = phone || user.phone;
-    user.designation = designation || user.designation;
-    user.subjects = subjects || user.subjects;
-    const updated = await user.save();
-    res.json({
-      _id: updated._id,
-      name: updated.name,
-      email: updated.email,
-      role: updated.role,
-      department: updated.department,
-      designation: updated.designation,
-      phone: updated.phone,
-      subjects: updated.subjects,
-      avatar: updated.avatar,
-    });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
-/* ── POST /api/users/avatar — upload / replace profile image ── */
 router.post("/avatar", protect, upload.single("avatar"), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ message: "No file uploaded" });
@@ -63,7 +12,7 @@ router.post("/avatar", protect, upload.single("avatar"), async (req, res) => {
     const user = await User.findById(req.user._id);
     if (!user) return res.status(404).json({ message: "User not found" });
 
-    /* Delete old avatar file from disk */
+    // delete old avatar
     if (user.avatar) {
       const oldPath = path.join(__dirname, "../", user.avatar);
       if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
@@ -72,25 +21,15 @@ router.post("/avatar", protect, upload.single("avatar"), async (req, res) => {
     user.avatar = `/uploads/avatars/${req.file.filename}`;
     await user.save();
 
-    res.json({
+    return res.json({
       message: "Avatar updated successfully",
       avatar: user.avatar,
-      user: {
-        _id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        department: user.department,
-        designation: user.designation,
-        avatar: user.avatar,
-      },
     });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return res.status(500).json({ message: error.message });
   }
 });
 
-/* ── DELETE /api/users/avatar — remove profile image ── */
 router.delete("/avatar", protect, async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
@@ -103,22 +42,90 @@ router.delete("/avatar", protect, async (req, res) => {
       await user.save();
     }
 
-    res.json({ message: "Avatar removed successfully" });
+    return res.json({ message: "Avatar removed successfully" });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return res.status(500).json({ message: error.message });
   }
 });
 
-/* ── PUT /api/users/:id/availability ── */
-router.put("/:id/availability", protect, async (req, res) => {
+router.get("/substitutes", protect, async (req, res) => {
   try {
-    const user = await User.findById(req.params.id);
-    if (!user) return res.status(404).json({ message: "User not found" });
-    user.isAvailable = req.body.isAvailable;
-    await user.save();
-    res.json({ message: "Availability updated", user });
+    // faculty/hod/admin can call, but result is restricted to caller's department
+    const users = await User.find({
+      department: req.user.department,
+      role: "faculty",
+      _id: { $ne: req.user._id },
+      isAvailable: { $ne: false },
+    })
+      .select("-password")
+      .sort({ name: 1 });
+
+    return res.json(users);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return res.status(500).json({ message: error.message });
+  }
+});
+
+/* Admin-only list all */
+router.get("/faculty/all", protect, async (req, res) => {
+  try {
+    if (req.user.role !== "admin")
+      return res.status(403).json({ message: "Admin access required" });
+
+    const { department } = req.query;
+    const query = {};
+    if (department) query.department = department;
+
+    const users = await User.find(query)
+      .select("-password")
+      .sort({ department: 1, name: 1 });
+    return res.json(users);
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+});
+
+/* HOD-only list department */
+router.get("/faculty/department", protect, async (req, res) => {
+  try {
+    if (req.user.role !== "hod")
+      return res.status(403).json({ message: "HOD access required" });
+
+    const users = await User.find({ department: req.user.department })
+      .select("-password")
+      .sort({ name: 1 });
+
+    return res.json(users);
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+});
+
+/* HOD-only allocate subjects using fat model method */
+router.put("/:id/subjects", protect, async (req, res) => {
+  try {
+    const teacher = await User.assignSubjectsByHod(
+      req.user,
+      req.params.id,
+      req.body.subjects,
+    );
+
+    return res.json({
+      message: "Subjects updated successfully",
+      user: {
+        _id: teacher._id,
+        name: teacher.name,
+        email: teacher.email,
+        role: teacher.role,
+        department: teacher.department,
+        program: teacher.program,
+        designation: teacher.designation,
+        subjects: teacher.subjects,
+        avatar: teacher.avatar,
+      },
+    });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({ message: error.message });
   }
 });
 
