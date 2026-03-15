@@ -12,11 +12,16 @@ import {
   Table,
   TableBody,
   TableCell,
+  TableContainer,
   TableHead,
   TableRow,
   Checkbox,
   LinearProgress,
   InputBase,
+  Alert,
+  Button,
+  IconButton,
+  Tooltip,
 } from "@mui/material";
 import {
   ArrowUpward,
@@ -27,6 +32,13 @@ import {
   AutoAwesome,
   KeyboardArrowRight,
   CheckCircle,
+  Warning,
+  CheckCircleOutline,
+  TimerOutlined,
+  Done,
+  Close,
+  UnfoldMore,
+  Info,
 } from "@mui/icons-material";
 import { useAuth } from "../context/authContext";
 import API, { getAvatarUrl } from "../api/axiosInstance";
@@ -55,6 +67,7 @@ const leaveTypeEmoji = {
   special: "📋",
   leaveWithoutPay: "⏸️",
 };
+
 const leaveTypeColor = {
   casual: "#7c3aed",
   medical: "#ef4444",
@@ -64,6 +77,7 @@ const leaveTypeColor = {
   special: "#f59e0b",
   leaveWithoutPay: "#64748b",
 };
+
 const statusBadge = (status) =>
   ({
     pending: { label: "Pending", bg: "#fef9c3", color: "#854d0e" },
@@ -85,19 +99,8 @@ const CollegeStaffIDCard = ({ user }) => {
       .toUpperCase() || "FA";
   const avatarUrl = getAvatarUrl(user?.avatar);
 
-  /*
-    SVG viewBox = 300 × 630
-    Inner white card: x=30, y=90, w=238.4, h=495
-    As percentages of viewBox:
-      left   = 30/300    = 10%
-      top    = 90/630    = 14.29%
-      width  = 238.4/300 = 79.47%
-      height = 495/630   = 78.57%
-  */
-
   return (
     <Box sx={{ position: "relative", width: "100%" }}>
-      {/* ── SVG shell ── */}
       <svg
         xmlns="http://www.w3.org/2000/svg"
         viewBox="0 0 300 630"
@@ -138,21 +141,7 @@ const CollegeStaffIDCard = ({ user }) => {
 
         <g filter="url(#card-shadow2)">
           <path
-            d="
-            M 35,80
-            L 75,80
-            L 90,50
-            L 208.4,50
-            L 223.4,80
-            L 263.4,80
-            A 15,15 0 0 1 278.4,95
-            L 278.4,575
-            A 25,25 0 0 1 253.4,600
-            L 45,600
-            A 25,25 0 0 1 20,575
-            L 20,95
-            A 15,15 0 0 1 35,80 Z
-          "
+            d="M 35,80 L 75,80 L 90,50 L 208.4,50 L 223.4,80 L 263.4,80 A 15,15 0 0 1 278.4,95 L 278.4,575 A 25,25 0 0 1 253.4,600 L 45,600 A 25,25 0 0 1 20,575 L 20,95 A 15,15 0 0 1 35,80 Z"
             fill="#202124"
           />
           <rect x="114.2" y="60" width="70" height="10" rx="5" fill="#ffffff" />
@@ -200,7 +189,6 @@ const CollegeStaffIDCard = ({ user }) => {
         <rect x="134.2" y="45" width="30" height="25" rx="4" fill="#111111" />
       </svg>
 
-      {/* ── Content overlay ── */}
       <Box
         sx={{
           position: "absolute",
@@ -214,7 +202,6 @@ const CollegeStaffIDCard = ({ user }) => {
           borderRadius: "8px",
         }}
       >
-        {/* PHOTO — top 56% */}
         <Box
           sx={{
             flex: "0 0 56%",
@@ -262,7 +249,6 @@ const CollegeStaffIDCard = ({ user }) => {
           )}
         </Box>
 
-        {/* NAME STRIP — dark band */}
         <Box
           sx={{
             bgcolor: "#202124",
@@ -288,7 +274,6 @@ const CollegeStaffIDCard = ({ user }) => {
           </Typography>
         </Box>
 
-        {/* INFO SECTION — white */}
         <Box
           sx={{
             flex: 1,
@@ -301,7 +286,6 @@ const CollegeStaffIDCard = ({ user }) => {
             justifyContent: "space-between",
           }}
         >
-          {/* Designation + Department */}
           <Box>
             <Typography
               sx={{
@@ -332,7 +316,6 @@ const CollegeStaffIDCard = ({ user }) => {
             </Typography>
           </Box>
 
-          {/* Footer: website + barcode + ref */}
           <Box>
             <Divider sx={{ borderColor: "#e2e8f0", mb: 0.6 }} />
             <Typography
@@ -352,7 +335,6 @@ const CollegeStaffIDCard = ({ user }) => {
                 gap: 0.5,
               }}
             >
-              {/* CSS barcode */}
               <Box
                 sx={{
                   flex: 1,
@@ -362,7 +344,6 @@ const CollegeStaffIDCard = ({ user }) => {
                   flexShrink: 1,
                 }}
               />
-              {/* Ref */}
               <Box sx={{ flexShrink: 0, textAlign: "right", ml: 0.5 }}>
                 <Typography
                   sx={{
@@ -511,7 +492,1484 @@ const FacultyRow = ({ users }) => {
   );
 };
 
-/* ── Main Dashboard ──────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════════
+   FACULTY DASHBOARD COMPONENTS
+   ═══════════════════════════════════════════════════════════ */
+
+/* Leave Balance Tiles */
+const LeaveBalanceTiles = ({ balance }) => {
+  const leaveTypes = [
+    { key: "casual", label: "Casual", color: "#7c3aed", emoji: "🏖" },
+    { key: "medical", label: "Medical", color: "#ef4444", emoji: "🏥" },
+    { key: "earned", label: "Earned", color: "#10b981", emoji: "⭐" },
+  ];
+
+  return (
+    <Grid container spacing={2} sx={{ mb: 2.5 }}>
+      {leaveTypes.map((type) => {
+        const b = balance?.[type.key];
+        if (!b || b.total === 0) return null;
+        const remaining = b.total - b.used;
+        const pct = (remaining / b.total) * 100;
+
+        return (
+          <Grid item xs={12} sm={6} md={4} key={type.key}>
+            <Card
+              sx={{
+                borderRadius: "12px",
+                border: `2px solid ${type.color}15`,
+                backgroundColor: `${type.color}08`,
+              }}
+            >
+              <CardContent sx={{ p: 2.5 }}>
+                <Box
+                  sx={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    mb: 1.5,
+                  }}
+                >
+                  <Box sx={{ fontSize: "1.8rem" }}>{type.emoji}</Box>
+                  <Chip
+                    label={`${pct.toFixed(0)}%`}
+                    size="small"
+                    sx={{
+                      bgcolor: `${type.color}20`,
+                      color: type.color,
+                      fontWeight: 700,
+                    }}
+                  />
+                </Box>
+                <Typography
+                  sx={{
+                    fontWeight: 700,
+                    fontSize: "0.9rem",
+                    color: "text.secondary",
+                    mb: 0.5,
+                  }}
+                >
+                  {type.label} Leave
+                </Typography>
+                <Typography
+                  sx={{
+                    fontWeight: 900,
+                    fontSize: "1.8rem",
+                    color: type.color,
+                    lineHeight: 1,
+                  }}
+                >
+                  {remaining}
+                </Typography>
+                <Typography
+                  sx={{
+                    fontSize: "0.75rem",
+                    color: "text.disabled",
+                    mt: 0.5,
+                  }}
+                >
+                  of {b.total} days
+                </Typography>
+                <LinearProgress
+                  variant="determinate"
+                  value={pct}
+                  sx={{
+                    height: 4,
+                    borderRadius: "2px",
+                    bgcolor: `${type.color}20`,
+                    mt: 1.5,
+                    "& .MuiLinearProgress-bar": {
+                      bgcolor: type.color,
+                      borderRadius: "2px",
+                    },
+                  }}
+                />
+              </CardContent>
+            </Card>
+          </Grid>
+        );
+      })}
+    </Grid>
+  );
+};
+
+/* Request Status Tracker */
+const RequestStatusTracker = ({ leaves }) => {
+  const pendingRequest = leaves.find((l) => l.status === "pending");
+  if (!pendingRequest) return null;
+
+  const stages = [
+    {
+      label: "Submitted",
+      status: "pending",
+      icon: TimerOutlined,
+      active: true,
+    },
+    {
+      label: "HOD Approved",
+      status: "hod_approved",
+      icon: CheckCircle,
+      active:
+        pendingRequest.status === "hod_approved" ||
+        pendingRequest.status === "approved",
+    },
+    {
+      label: "Admin Approved",
+      status: "approved",
+      icon: CheckCircleOutline,
+      active: pendingRequest.status === "approved",
+    },
+  ];
+
+  return (
+    <Card sx={{ mb: 2.5, borderRadius: "12px" }}>
+      <CardContent sx={{ p: 2.5 }}>
+        <Typography sx={{ fontWeight: 700, mb: 2, fontSize: "1rem" }}>
+          Request Status
+        </Typography>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 0 }}>
+          {stages.map((stage, idx) => (
+            <Box
+              key={stage.status}
+              sx={{ display: "flex", alignItems: "center", flex: 1 }}
+            >
+              <Box
+                sx={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  flex: 1,
+                }}
+              >
+                <Box
+                  sx={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: "50%",
+                    bgcolor: stage.active ? "#7c3aed" : "#e5e7eb",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    mb: 1,
+                  }}
+                >
+                  <stage.icon
+                    sx={{
+                      color: stage.active ? "white" : "#9ca3af",
+                      fontSize: 20,
+                    }}
+                  />
+                </Box>
+                <Typography
+                  sx={{
+                    fontSize: "0.75rem",
+                    fontWeight: 600,
+                    color: stage.active ? "#7c3aed" : "#9ca3af",
+                    textAlign: "center",
+                  }}
+                >
+                  {stage.label}
+                </Typography>
+              </Box>
+              {idx < stages.length - 1 && (
+                <Box
+                  sx={{
+                    height: 2,
+                    flex: 1,
+                    bgcolor: stage.active ? "#7c3aed" : "#e5e7eb",
+                    mx: 1,
+                  }}
+                />
+              )}
+            </Box>
+          ))}
+        </Box>
+      </CardContent>
+    </Card>
+  );
+};
+
+/* Personal Leave Calendar */
+const PersonalLeaveCalendar = ({ leaves }) => {
+  const currentMonth = new Date().getMonth();
+  const currentYear = new Date().getFullYear();
+  const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+  const firstDay = new Date(currentYear, currentMonth, 1).getDay();
+
+  const approvedLeaveDates = new Set();
+  leaves
+    .filter((l) => l.status === "approved")
+    .forEach((l) => {
+      const start = new Date(l.startDate);
+      const end = new Date(l.endDate);
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        approvedLeaveDates.add(d.getDate());
+      }
+    });
+
+  const days = Array(firstDay).fill(null);
+  for (let i = 1; i <= daysInMonth; i++) {
+    days.push(i);
+  }
+
+  return (
+    <Card sx={{ mb: 2.5, borderRadius: "12px" }}>
+      <CardContent sx={{ p: 2.5 }}>
+        <Typography sx={{ fontWeight: 700, mb: 2, fontSize: "1rem" }}>
+          {MONTHS[currentMonth]} {currentYear}
+        </Typography>
+        <Grid container spacing={1}>
+          {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+            <Grid item xs={12 / 7} key={day}>
+              <Box
+                sx={{
+                  textAlign: "center",
+                  fontWeight: 700,
+                  fontSize: "0.75rem",
+                  color: "text.disabled",
+                  mb: 1,
+                }}
+              >
+                {day}
+              </Box>
+            </Grid>
+          ))}
+          {days.map((day, idx) => (
+            <Grid item xs={12 / 7} key={idx}>
+              <Box
+                sx={{
+                  aspectRatio: "1",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderRadius: "8px",
+                  bgcolor:
+                    day && approvedLeaveDates.has(day)
+                      ? "#10b98120"
+                      : "transparent",
+                  border:
+                    day && approvedLeaveDates.has(day)
+                      ? "2px solid #10b981"
+                      : "none",
+                  fontSize: "0.9rem",
+                  fontWeight: 600,
+                  color: day ? "text.primary" : "transparent",
+                }}
+              >
+                {day}
+              </Box>
+            </Grid>
+          ))}
+        </Grid>
+      </CardContent>
+    </Card>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════════
+   MODERN SAAS TABLES - NEW COMPONENTS
+   ═══════════════════════════════════════════════════════════ */
+
+/* Admin: All Staff Leave This Month */
+const AdminLeaveMonthlyTable = ({ leaves, allUsers }) => {
+  const currentMonth = new Date().getMonth();
+  const currentYear = new Date().getFullYear();
+
+  const monthlyLeaves = leaves.filter((leave) => {
+    const leaveMonth = new Date(leave.startDate).getMonth();
+    const leaveYear = new Date(leave.startDate).getFullYear();
+    return (
+      leave.status === "approved" &&
+      leaveMonth === currentMonth &&
+      leaveYear === currentYear
+    );
+  });
+
+  const facultyLeaveStats = monthlyLeaves.reduce((acc, leave) => {
+    const facultyId = leave.faculty?._id;
+    if (!acc[facultyId]) {
+      acc[facultyId] = {
+        faculty: leave.faculty,
+        department: leave.faculty?.department,
+        totalDays: 0,
+        leaves: [],
+      };
+    }
+    acc[facultyId].totalDays += leave.totalDays || 0;
+    acc[facultyId].leaves.push(leave);
+    return acc;
+  }, {});
+
+  const tableData = Object.values(facultyLeaveStats).sort(
+    (a, b) => b.totalDays - a.totalDays,
+  );
+
+  return (
+    <Card
+      sx={{
+        borderRadius: "16px",
+        boxShadow: "0 2px 8px rgba(0, 0, 0, 0.08)",
+        overflow: "hidden",
+        bgcolor: "#ffffff",
+        mb: 2.5,
+      }}
+    >
+      <CardContent sx={{ p: 0 }}>
+        {/* Header */}
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            px: 3.5,
+            py: 2.5,
+            borderBottom: "1px solid #f0f0f0",
+          }}
+        >
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+            <Typography
+              sx={{
+                fontSize: "1.1rem",
+                fontWeight: 700,
+                color: "#0f172a",
+              }}
+            >
+              Staff Leave This Month
+            </Typography>
+            <Chip
+              label={`${tableData.length} Active`}
+              size="small"
+              sx={{
+                bgcolor: "#dbeafe",
+                color: "#1e40af",
+                fontWeight: 600,
+                fontSize: "0.7rem",
+                height: 24,
+              }}
+            />
+          </Box>
+          <Tooltip title="Filter">
+            <IconButton
+              size="small"
+              sx={{
+                bgcolor: "#f3f4f6",
+                "&:hover": { bgcolor: "#e5e7eb" },
+              }}
+            >
+              <FilterList sx={{ fontSize: 20, color: "#6b7280" }} />
+            </IconButton>
+          </Tooltip>
+        </Box>
+
+        {/* Table */}
+        <TableContainer sx={{ overflowX: "auto" }}>
+          <Table sx={{ minWidth: 800 }}>
+            <TableHead>
+              <TableRow
+                sx={{ bgcolor: "#f9fafb", borderBottom: "1px solid #f0f0f0" }}
+              >
+                <TableCell
+                  sx={{
+                    px: 3.5,
+                    py: 2,
+                    fontWeight: 700,
+                    fontSize: "0.8rem",
+                    color: "#6b7280",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.5px",
+                  }}
+                >
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                    Full Name <UnfoldMore sx={{ fontSize: 14 }} />
+                  </Box>
+                </TableCell>
+                <TableCell
+                  sx={{
+                    px: 3.5,
+                    py: 2,
+                    fontWeight: 700,
+                    fontSize: "0.8rem",
+                    color: "#6b7280",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.5px",
+                  }}
+                >
+                  Department
+                </TableCell>
+                <TableCell
+                  sx={{
+                    px: 3.5,
+                    py: 2,
+                    fontWeight: 700,
+                    fontSize: "0.8rem",
+                    color: "#6b7280",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.5px",
+                  }}
+                >
+                  Leave Types
+                </TableCell>
+                <TableCell
+                  sx={{
+                    px: 3.5,
+                    py: 2,
+                    fontWeight: 700,
+                    fontSize: "0.8rem",
+                    color: "#6b7280",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.5px",
+                  }}
+                >
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                    Total Days <UnfoldMore sx={{ fontSize: 14 }} />
+                  </Box>
+                </TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {tableData.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={4} sx={{ py: 4, textAlign: "center" }}>
+                    <Typography sx={{ color: "text.secondary" }}>
+                      No staff on leave this month
+                    </Typography>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                tableData.map((row, idx) => (
+                  <TableRow
+                    key={row.faculty?._id || idx}
+                    sx={{
+                      borderBottom: "1px solid #f0f0f0",
+                      "&:hover": { bgcolor: "#fafbfc" },
+                      transition: "background-color 0.2s",
+                    }}
+                  >
+                    {/* Faculty Name & Avatar */}
+                    <TableCell sx={{ px: 3.5, py: 2.5 }}>
+                      <Box
+                        sx={{ display: "flex", alignItems: "center", gap: 1.5 }}
+                      >
+                        <Avatar
+                          src={getAvatarUrl(row.faculty?.avatar)}
+                          sx={{
+                            width: 42,
+                            height: 42,
+                            fontSize: 16,
+                            fontWeight: 700,
+                            bgcolor: "#7c3aed",
+                          }}
+                        >
+                          {row.faculty?.name?.charAt(0)}
+                        </Avatar>
+                        <Box>
+                          <Typography
+                            sx={{
+                              fontWeight: 700,
+                              fontSize: "0.95rem",
+                              color: "#0f172a",
+                            }}
+                          >
+                            {row.faculty?.name}
+                          </Typography>
+                          <Typography
+                            sx={{
+                              fontSize: "0.75rem",
+                              color: "#9ca3af",
+                              mt: 0.25,
+                            }}
+                          >
+                            @{row.faculty?.email?.split("@")[0] || "faculty"}
+                          </Typography>
+                        </Box>
+                      </Box>
+                    </TableCell>
+
+                    {/* Department */}
+                    <TableCell sx={{ px: 3.5, py: 2.5 }}>
+                      <Chip
+                        label={row.department || "N/A"}
+                        size="small"
+                        sx={{
+                          bgcolor: "#f0f4ff",
+                          color: "#7c3aed",
+                          fontWeight: 600,
+                          fontSize: "0.8rem",
+                        }}
+                      />
+                    </TableCell>
+
+                    {/* Leave Types */}
+                    <TableCell sx={{ px: 3.5, py: 2.5 }}>
+                      <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap" }}>
+                        {[...new Set(row.leaves.map((l) => l.leaveType))].map(
+                          (type) => (
+                            <Chip
+                              key={type}
+                              label={type === "leaveWithoutPay" ? "LWP" : type}
+                              size="small"
+                              sx={{
+                                bgcolor: `${leaveTypeColor[type]}15`,
+                                color: leaveTypeColor[type],
+                                fontWeight: 600,
+                                fontSize: "0.75rem",
+                                height: 24,
+                              }}
+                            />
+                          ),
+                        )}
+                      </Box>
+                    </TableCell>
+
+                    {/* Total Days Progress */}
+                    <TableCell sx={{ px: 3.5, py: 2.5 }}>
+                      <Box
+                        sx={{ display: "flex", alignItems: "center", gap: 1.5 }}
+                      >
+                        <Box sx={{ minWidth: 60 }}>
+                          <LinearProgress
+                            variant="determinate"
+                            value={Math.min((row.totalDays / 30) * 100, 100)}
+                            sx={{
+                              height: 6,
+                              borderRadius: 3,
+                              bgcolor: "#e5e7eb",
+                              "& .MuiLinearProgress-bar": {
+                                bgcolor: "#7c3aed",
+                                borderRadius: 3,
+                              },
+                            }}
+                          />
+                        </Box>
+                        <Typography
+                          sx={{
+                            fontWeight: 700,
+                            fontSize: "0.9rem",
+                            color: "#0f172a",
+                            minWidth: 35,
+                          }}
+                        >
+                          {row.totalDays}d
+                        </Typography>
+                      </Box>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </CardContent>
+    </Card>
+  );
+};
+
+/* HOD: Department Staff Leave This Month */
+const HODLeaveMonthlyTable = ({ leaves, userDepartment }) => {
+  const currentMonth = new Date().getMonth();
+  const currentYear = new Date().getFullYear();
+
+  const monthlyLeaves = leaves.filter((leave) => {
+    const leaveMonth = new Date(leave.startDate).getMonth();
+    const leaveYear = new Date(leave.startDate).getFullYear();
+    return (
+      leave.status === "approved" &&
+      leaveMonth === currentMonth &&
+      leaveYear === currentYear &&
+      leave.faculty?.department === userDepartment
+    );
+  });
+
+  const facultyLeaveStats = monthlyLeaves.reduce((acc, leave) => {
+    const facultyId = leave.faculty?._id;
+    if (!acc[facultyId]) {
+      acc[facultyId] = {
+        faculty: leave.faculty,
+        department: leave.faculty?.department,
+        totalDays: 0,
+        leaves: [],
+      };
+    }
+    acc[facultyId].totalDays += leave.totalDays || 0;
+    acc[facultyId].leaves.push(leave);
+    return acc;
+  }, {});
+
+  const tableData = Object.values(facultyLeaveStats).sort(
+    (a, b) => b.totalDays - a.totalDays,
+  );
+
+  return (
+    <Card
+      sx={{
+        borderRadius: "16px",
+        boxShadow: "0 2px 8px rgba(0, 0, 0, 0.08)",
+        overflow: "hidden",
+        bgcolor: "#ffffff",
+        mb: 2.5,
+      }}
+    >
+      <CardContent sx={{ p: 0 }}>
+        {/* Header */}
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            px: 3.5,
+            py: 2.5,
+            borderBottom: "1px solid #f0f0f0",
+          }}
+        >
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+            <Typography
+              sx={{
+                fontSize: "1.1rem",
+                fontWeight: 700,
+                color: "#0f172a",
+              }}
+            >
+              Department Leave Activity
+            </Typography>
+            <Chip
+              label={`${tableData.length} Members`}
+              size="small"
+              sx={{
+                bgcolor: "#fef3c7",
+                color: "#92400e",
+                fontWeight: 600,
+                fontSize: "0.7rem",
+                height: 24,
+              }}
+            />
+          </Box>
+          <Tooltip title="Filter">
+            <IconButton
+              size="small"
+              sx={{
+                bgcolor: "#f3f4f6",
+                "&:hover": { bgcolor: "#e5e7eb" },
+              }}
+            >
+              <FilterList sx={{ fontSize: 20, color: "#6b7280" }} />
+            </IconButton>
+          </Tooltip>
+        </Box>
+
+        {/* Table */}
+        <TableContainer sx={{ overflowX: "auto" }}>
+          <Table sx={{ minWidth: 800 }}>
+            <TableHead>
+              <TableRow
+                sx={{ bgcolor: "#f9fafb", borderBottom: "1px solid #f0f0f0" }}
+              >
+                <TableCell
+                  sx={{
+                    px: 3.5,
+                    py: 2,
+                    fontWeight: 700,
+                    fontSize: "0.8rem",
+                    color: "#6b7280",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.5px",
+                  }}
+                >
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                    Staff Name <UnfoldMore sx={{ fontSize: 14 }} />
+                  </Box>
+                </TableCell>
+                <TableCell
+                  sx={{
+                    px: 3.5,
+                    py: 2,
+                    fontWeight: 700,
+                    fontSize: "0.8rem",
+                    color: "#6b7280",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.5px",
+                  }}
+                >
+                  Leave Dates
+                </TableCell>
+                <TableCell
+                  sx={{
+                    px: 3.5,
+                    py: 2,
+                    fontWeight: 700,
+                    fontSize: "0.8rem",
+                    color: "#6b7280",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.5px",
+                  }}
+                >
+                  Leave Type
+                </TableCell>
+                <TableCell
+                  sx={{
+                    px: 3.5,
+                    py: 2,
+                    fontWeight: 700,
+                    fontSize: "0.8rem",
+                    color: "#6b7280",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.5px",
+                  }}
+                >
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                    Duration <UnfoldMore sx={{ fontSize: 14 }} />
+                  </Box>
+                </TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {tableData.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={4} sx={{ py: 4, textAlign: "center" }}>
+                    <Typography sx={{ color: "text.secondary" }}>
+                      No staff on leave this month
+                    </Typography>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                tableData.map((row, idx) => (
+                  <TableRow
+                    key={row.faculty?._id || idx}
+                    sx={{
+                      borderBottom: "1px solid #f0f0f0",
+                      "&:hover": { bgcolor: "#fafbfc" },
+                      transition: "background-color 0.2s",
+                    }}
+                  >
+                    {/* Staff Name & Avatar */}
+                    <TableCell sx={{ px: 3.5, py: 2.5 }}>
+                      <Box
+                        sx={{ display: "flex", alignItems: "center", gap: 1.5 }}
+                      >
+                        <Avatar
+                          src={getAvatarUrl(row.faculty?.avatar)}
+                          sx={{
+                            width: 42,
+                            height: 42,
+                            fontSize: 16,
+                            fontWeight: 700,
+                            bgcolor: "#f59e0b",
+                          }}
+                        >
+                          {row.faculty?.name?.charAt(0)}
+                        </Avatar>
+                        <Box>
+                          <Typography
+                            sx={{
+                              fontWeight: 700,
+                              fontSize: "0.95rem",
+                              color: "#0f172a",
+                            }}
+                          >
+                            {row.faculty?.name}
+                          </Typography>
+                          <Typography
+                            sx={{
+                              fontSize: "0.75rem",
+                              color: "#9ca3af",
+                              mt: 0.25,
+                            }}
+                          >
+                            @{row.faculty?.email?.split("@")[0] || "staff"}
+                          </Typography>
+                        </Box>
+                      </Box>
+                    </TableCell>
+
+                    {/* Leave Dates */}
+                    <TableCell sx={{ px: 3.5, py: 2.5 }}>
+                      <Box>
+                        {row.leaves.slice(0, 2).map((leave, idx) => (
+                          <Typography
+                            key={idx}
+                            sx={{
+                              fontSize: "0.8rem",
+                              color: "#374151",
+                              fontWeight: 500,
+                            }}
+                          >
+                            {new Date(leave.startDate).toLocaleDateString(
+                              "en-US",
+                              {
+                                month: "short",
+                                day: "numeric",
+                              },
+                            )}{" "}
+                            -{" "}
+                            {new Date(leave.endDate).toLocaleDateString(
+                              "en-US",
+                              {
+                                month: "short",
+                                day: "numeric",
+                              },
+                            )}
+                          </Typography>
+                        ))}
+                        {row.leaves.length > 2 && (
+                          <Typography
+                            sx={{
+                              fontSize: "0.75rem",
+                              color: "#9ca3af",
+                              mt: 0.5,
+                            }}
+                          >
+                            +{row.leaves.length - 2} more
+                          </Typography>
+                        )}
+                      </Box>
+                    </TableCell>
+
+                    {/* Leave Type */}
+                    <TableCell sx={{ px: 3.5, py: 2.5 }}>
+                      <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap" }}>
+                        {[...new Set(row.leaves.map((l) => l.leaveType))].map(
+                          (type) => (
+                            <Chip
+                              key={type}
+                              label={type === "leaveWithoutPay" ? "LWP" : type}
+                              size="small"
+                              sx={{
+                                bgcolor: `${leaveTypeColor[type]}15`,
+                                color: leaveTypeColor[type],
+                                fontWeight: 600,
+                                fontSize: "0.75rem",
+                                height: 24,
+                              }}
+                            />
+                          ),
+                        )}
+                      </Box>
+                    </TableCell>
+
+                    {/* Duration Progress */}
+                    <TableCell sx={{ px: 3.5, py: 2.5 }}>
+                      <Box
+                        sx={{ display: "flex", alignItems: "center", gap: 1.5 }}
+                      >
+                        <Box sx={{ minWidth: 80 }}>
+                          <LinearProgress
+                            variant="determinate"
+                            value={Math.min((row.totalDays / 30) * 100, 100)}
+                            sx={{
+                              height: 6,
+                              borderRadius: 3,
+                              bgcolor: "#e5e7eb",
+                              "& .MuiLinearProgress-bar": {
+                                bgcolor: "#f59e0b",
+                                borderRadius: 3,
+                              },
+                            }}
+                          />
+                        </Box>
+                        <Tooltip title={`${row.totalDays} days total`}>
+                          <Typography
+                            sx={{
+                              fontWeight: 700,
+                              fontSize: "0.9rem",
+                              color: "#0f172a",
+                              minWidth: 40,
+                            }}
+                          >
+                            {row.totalDays}d
+                          </Typography>
+                        </Tooltip>
+                      </Box>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </CardContent>
+    </Card>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════════
+   HOD DASHBOARD COMPONENTS
+   ═══════════════════════════════════════════════════════════ */
+
+/* Pending Approvals List */
+const PendingApprovalsListHOD = ({ leaves, userDepartment }) => {
+  const pendingRequests = leaves.filter(
+    (l) => l.status === "pending" && l.faculty?.department === userDepartment,
+  );
+
+  if (pendingRequests.length === 0) {
+    return (
+      <Alert severity="success" sx={{ mb: 2.5 }}>
+        ✅ No pending approvals at the moment
+      </Alert>
+    );
+  }
+
+  return (
+    <Card sx={{ mb: 2.5, borderRadius: "12px" }}>
+      <CardContent sx={{ p: 0 }}>
+        <Box sx={{ px: 2.5, py: 2, borderBottom: "1px solid #e5e7eb" }}>
+          <Typography sx={{ fontWeight: 700, fontSize: "1.05rem" }}>
+            Pending Approvals ({pendingRequests.length})
+          </Typography>
+        </Box>
+        <Table size="small">
+          <TableHead>
+            <TableRow sx={{ bgcolor: "background.default" }}>
+              <TableCell sx={{ fontWeight: 700, fontSize: "0.75rem" }}>
+                Faculty
+              </TableCell>
+              <TableCell sx={{ fontWeight: 700, fontSize: "0.75rem" }}>
+                Dates
+              </TableCell>
+              <TableCell sx={{ fontWeight: 700, fontSize: "0.75rem" }}>
+                Type
+              </TableCell>
+              <TableCell sx={{ fontWeight: 700, fontSize: "0.75rem" }}>
+                Reason
+              </TableCell>
+              <TableCell
+                sx={{ fontWeight: 700, fontSize: "0.75rem" }}
+                align="center"
+              >
+                Actions
+              </TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {pendingRequests.map((leave) => (
+              <TableRow key={leave._id}>
+                <TableCell>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    <Avatar
+                      src={getAvatarUrl(leave.faculty?.avatar)}
+                      sx={{ width: 32, height: 32, fontSize: "0.8rem" }}
+                    >
+                      {leave.faculty?.name?.charAt(0)}
+                    </Avatar>
+                    <Typography sx={{ fontSize: "0.85rem", fontWeight: 600 }}>
+                      {leave.faculty?.name}
+                    </Typography>
+                  </Box>
+                </TableCell>
+                <TableCell sx={{ fontSize: "0.85rem" }}>
+                  {new Date(leave.startDate).toLocaleDateString()} -{" "}
+                  {new Date(leave.endDate).toLocaleDateString()}
+                </TableCell>
+                <TableCell>
+                  <Chip
+                    label={leave.leaveType}
+                    size="small"
+                    sx={{
+                      bgcolor: `${leaveTypeColor[leave.leaveType]}20`,
+                      color: leaveTypeColor[leave.leaveType],
+                      fontWeight: 600,
+                      fontSize: "0.7rem",
+                    }}
+                  />
+                </TableCell>
+                <TableCell sx={{ fontSize: "0.85rem", maxWidth: 200 }}>
+                  {leave.reason}
+                </TableCell>
+                <TableCell align="center">
+                  <Box
+                    sx={{ display: "flex", gap: 0.5, justifyContent: "center" }}
+                  >
+                    <Button
+                      size="small"
+                      variant="contained"
+                      sx={{ bgcolor: "#10b981" }}
+                    >
+                      <Done sx={{ fontSize: 16 }} />
+                    </Button>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      sx={{ color: "#ef4444" }}
+                    >
+                      <Close sx={{ fontSize: 16 }} />
+                    </Button>
+                  </Box>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  );
+};
+
+/* Department Who's Out Calendar */
+const DepartmentWhosOutCalendar = ({ leaves, userDepartment }) => {
+  const departmentOnLeave = leaves.filter(
+    (l) =>
+      l.status === "approved" &&
+      l.faculty?.department === userDepartment &&
+      new Date(l.endDate) >= new Date(),
+  );
+
+  return (
+    <Card sx={{ mb: 2.5, borderRadius: "12px" }}>
+      <CardContent sx={{ p: 2.5 }}>
+        <Typography sx={{ fontWeight: 700, mb: 2, fontSize: "1rem" }}>
+          Department: Who's Out 👥
+        </Typography>
+        {departmentOnLeave.length === 0 ? (
+          <Typography sx={{ color: "text.disabled", fontSize: "0.9rem" }}>
+            Everyone is in the office
+          </Typography>
+        ) : (
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+            {departmentOnLeave.map((leave) => (
+              <Box
+                key={leave._id}
+                sx={{
+                  p: 1.5,
+                  bgcolor: "#f3f4f6",
+                  borderRadius: "8px",
+                  borderLeft: `4px solid ${leaveTypeColor[leave.leaveType]}`,
+                }}
+              >
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 1,
+                    mb: 0.5,
+                  }}
+                >
+                  <Avatar
+                    src={getAvatarUrl(leave.faculty?.avatar)}
+                    sx={{ width: 28, height: 28, fontSize: "0.75rem" }}
+                  >
+                    {leave.faculty?.name?.charAt(0)}
+                  </Avatar>
+                  <Typography sx={{ fontWeight: 700, fontSize: "0.9rem" }}>
+                    {leave.faculty?.name}
+                  </Typography>
+                  <Typography sx={{ fontSize: "0.75rem", color: "#7c3aed" }}>
+                    {leave.leaveType === "leaveWithoutPay"
+                      ? "LWP"
+                      : leave.leaveType === "compensatory"
+                        ? "Compensatory"
+                        : leave.leaveType === "onDuty"
+                          ? "On Duty"
+                          : leave.leaveType}
+                  </Typography>
+                </Box>
+                <Typography
+                  sx={{ fontSize: "0.8rem", color: "text.secondary" }}
+                >
+                  {new Date(leave.startDate).toLocaleDateString()} -{" "}
+                  {new Date(leave.endDate).toLocaleDateString()}
+                </Typography>
+              </Box>
+            ))}
+          </Box>
+        )}
+      </CardContent>
+    </Card>
+  );
+};
+
+/* Overlap Alerts */
+const OverlapAlertsHOD = ({ leaves, userDepartment }) => {
+  const departmentLeaves = leaves.filter(
+    (l) => l.status === "approved" && l.faculty?.department === userDepartment,
+  );
+
+  const dateConflicts = {};
+  departmentLeaves.forEach((leave) => {
+    const start = new Date(leave.startDate);
+    const end = new Date(leave.endDate);
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      const dateStr = d.toISOString().split("T")[0];
+      dateConflicts[dateStr] = (dateConflicts[dateStr] || 0) + 1;
+    }
+  });
+
+  const criticalDates = Object.entries(dateConflicts).filter(
+    ([, count]) => count >= 3,
+  );
+
+  if (criticalDates.length === 0) {
+    return null;
+  }
+
+  return (
+    <Alert severity="warning" sx={{ mb: 2.5 }} icon={<Warning />}>
+      <Box>
+        <Typography sx={{ fontWeight: 700, mb: 1 }}>
+          ⚠️ Overlap Alert
+        </Typography>
+        <Typography sx={{ fontSize: "0.9rem" }}>
+          {criticalDates.length} date(s) have 3+ faculty on leave. Department
+          coverage may be affected.
+        </Typography>
+        <Box sx={{ mt: 1, display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+          {criticalDates.map(([date, count]) => (
+            <Chip
+              key={date}
+              label={`${date}: ${count} staff`}
+              size="small"
+              sx={{ bgcolor: "#fef9c3", color: "#854d0e", fontWeight: 600 }}
+            />
+          ))}
+        </Box>
+      </Box>
+    </Alert>
+  );
+};
+
+/* ══════════════════════════════════════════════���════════════
+   ADMIN DASHBOARD COMPONENTS
+   ═══════════════════════════════════════════════════════════ */
+
+/* Final Approval Queue */
+const FinalApprovalQueueAdmin = ({ leaves }) => {
+  const hodApprovedRequests = leaves.filter((l) => l.status === "hod_approved");
+
+  if (hodApprovedRequests.length === 0) {
+    return (
+      <Alert severity="success" sx={{ mb: 2.5 }}>
+        ✅ All requests have been processed
+      </Alert>
+    );
+  }
+
+  return (
+    <Card sx={{ mb: 2.5, borderRadius: "12px" }}>
+      <CardContent sx={{ p: 0 }}>
+        <Box sx={{ px: 2.5, py: 2, borderBottom: "1px solid #e5e7eb" }}>
+          <Typography sx={{ fontWeight: 700, fontSize: "1.05rem" }}>
+            Final Approval Queue ({hodApprovedRequests.length})
+          </Typography>
+        </Box>
+        <Table size="small">
+          <TableHead>
+            <TableRow sx={{ bgcolor: "background.default" }}>
+              <TableCell sx={{ fontWeight: 700, fontSize: "0.75rem" }}>
+                Faculty
+              </TableCell>
+              <TableCell sx={{ fontWeight: 700, fontSize: "0.75rem" }}>
+                Department
+              </TableCell>
+              <TableCell sx={{ fontWeight: 700, fontSize: "0.75rem" }}>
+                Dates
+              </TableCell>
+              <TableCell sx={{ fontWeight: 700, fontSize: "0.75rem" }}>
+                Type
+              </TableCell>
+              <TableCell sx={{ fontWeight: 700, fontSize: "0.75rem" }}>
+                HOD Status
+              </TableCell>
+              <TableCell
+                sx={{ fontWeight: 700, fontSize: "0.75rem" }}
+                align="center"
+              >
+                Actions
+              </TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {hodApprovedRequests.map((leave) => (
+              <TableRow key={leave._id}>
+                <TableCell>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    <Avatar
+                      src={getAvatarUrl(leave.faculty?.avatar)}
+                      sx={{ width: 32, height: 32, fontSize: "0.8rem" }}
+                    >
+                      {leave.faculty?.name?.charAt(0)}
+                    </Avatar>
+                    <Typography sx={{ fontSize: "0.85rem", fontWeight: 600 }}>
+                      {leave.faculty?.name}
+                    </Typography>
+                  </Box>
+                </TableCell>
+                <TableCell sx={{ fontSize: "0.85rem" }}>
+                  {leave.faculty?.department}
+                </TableCell>
+                <TableCell sx={{ fontSize: "0.85rem" }}>
+                  {new Date(leave.startDate).toLocaleDateString()} -{" "}
+                  {new Date(leave.endDate).toLocaleDateString()}
+                </TableCell>
+                <TableCell>
+                  <Chip
+                    label={leave.leaveType}
+                    size="small"
+                    sx={{
+                      bgcolor: `${leaveTypeColor[leave.leaveType]}20`,
+                      color: leaveTypeColor[leave.leaveType],
+                      fontWeight: 600,
+                      fontSize: "0.7rem",
+                    }}
+                  />
+                </TableCell>
+                <TableCell>
+                  <Chip
+                    icon={<CheckCircle sx={{ fontSize: 14 }} />}
+                    label="HOD Approved"
+                    size="small"
+                    sx={{
+                      bgcolor: "#dbeafe",
+                      color: "#1e40af",
+                      fontWeight: 600,
+                      fontSize: "0.7rem",
+                    }}
+                  />
+                </TableCell>
+                <TableCell align="center">
+                  <Box
+                    sx={{ display: "flex", gap: 0.5, justifyContent: "center" }}
+                  >
+                    <Button
+                      size="small"
+                      variant="contained"
+                      sx={{ bgcolor: "#10b981" }}
+                    >
+                      <Done sx={{ fontSize: 16 }} />
+                    </Button>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      sx={{ color: "#ef4444" }}
+                    >
+                      <Close sx={{ fontSize: 16 }} />
+                    </Button>
+                  </Box>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  );
+};
+
+/* Institutional Analytics */
+const InstitutionalAnalytics = ({ leaves, allUsers }) => {
+  const todaysDate = new Date();
+  const todayOnLeave = leaves.filter(
+    (l) =>
+      l.status === "approved" &&
+      new Date(l.startDate) <= todaysDate &&
+      new Date(l.endDate) >= todaysDate,
+  ).length;
+
+  const departmentDistribution = {};
+  leaves
+    .filter((l) => l.status === "approved")
+    .forEach((l) => {
+      const dept = l.faculty?.department || "Unknown";
+      departmentDistribution[dept] = (departmentDistribution[dept] || 0) + 1;
+    });
+
+  // ✅ IMPROVED: Show all departments sorted by activity
+  const sortedDepts = Object.entries(departmentDistribution).sort(
+    ([, a], [, b]) => b - a,
+  );
+
+  const topDept = sortedDepts[0];
+  const secondDept = sortedDepts[1];
+
+  return (
+    <Grid container spacing={2} sx={{ mb: 2.5 }}>
+      <Grid item xs={12} sm={6}>
+        <Card sx={{ borderRadius: "12px" }}>
+          <CardContent sx={{ p: 2.5 }}>
+            <Box
+              sx={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <Box>
+                <Typography
+                  sx={{ fontSize: "0.85rem", color: "text.secondary", mb: 0.5 }}
+                >
+                  On Leave Today
+                </Typography>
+                <Typography
+                  sx={{ fontWeight: 900, fontSize: "2rem", color: "#ef4444" }}
+                >
+                  {todayOnLeave}
+                </Typography>
+                <Typography
+                  sx={{ fontSize: "0.75rem", color: "text.disabled" }}
+                >
+                  of {allUsers.length} employees
+                </Typography>
+              </Box>
+              <Box
+                sx={{
+                  width: 60,
+                  height: 60,
+                  borderRadius: "50%",
+                  bgcolor: "#fee2e210",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Typography sx={{ fontSize: "1.8rem" }}>👥</Typography>
+              </Box>
+            </Box>
+          </CardContent>
+        </Card>
+      </Grid>
+
+      <Grid item xs={12} sm={6}>
+        <Card sx={{ borderRadius: "12px" }}>
+          <CardContent sx={{ p: 2.5 }}>
+            <Box
+              sx={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <Box>
+                <Typography
+                  sx={{ fontSize: "0.85rem", color: "text.secondary", mb: 0.5 }}
+                >
+                  Most Active Department
+                </Typography>
+                <Typography
+                  sx={{ fontWeight: 900, fontSize: "1.5rem", color: "#7c3aed" }}
+                >
+                  {topDept?.[0] || "—"}
+                </Typography>
+                <Box
+                  sx={{
+                    display: "flex",
+                    gap: 1,
+                    mt: 0.5,
+                    alignItems: "center",
+                  }}
+                >
+                  <Typography
+                    sx={{ fontSize: "0.75rem", color: "text.disabled" }}
+                  >
+                    {topDept?.[1] || 0} leaves
+                  </Typography>
+                  {secondDept && (
+                    <Typography sx={{ fontSize: "0.65rem", color: "#9ca3af" }}>
+                      • 2nd: {secondDept[0]} ({secondDept[1]})
+                    </Typography>
+                  )}
+                </Box>
+              </Box>
+              <Box
+                sx={{
+                  width: 60,
+                  height: 60,
+                  borderRadius: "50%",
+                  bgcolor: "#f5f3ff",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Typography sx={{ fontSize: "1.8rem" }}>📊</Typography>
+              </Box>
+            </Box>
+          </CardContent>
+        </Card>
+      </Grid>
+
+      {/* NEW: Department Breakdown Table */}
+      {sortedDepts.length > 0 && (
+        <Grid item xs={12}>
+          <Card sx={{ borderRadius: "12px" }}>
+            <CardContent sx={{ p: 2.5 }}>
+              <Typography
+                sx={{ fontWeight: 700, mb: 1.5, fontSize: "0.95rem" }}
+              >
+                Leave Activity by Department
+              </Typography>
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                {sortedDepts.map(([dept, count], idx) => (
+                  <Box
+                    key={dept}
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      p: 1.5,
+                      bgcolor: idx === 0 ? "#f5f3ff" : "background.default",
+                      borderRadius: "8px",
+                      border: idx === 0 ? "1px solid #e0d7ff" : "none",
+                    }}
+                  >
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                      <Box
+                        sx={{
+                          width: 32,
+                          height: 32,
+                          borderRadius: "8px",
+                          bgcolor: `${"#7c3aed"}15`,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontSize: "0.9rem",
+                        }}
+                      >
+                        {idx + 1}
+                      </Box>
+                      <Typography sx={{ fontWeight: 600, fontSize: "0.9rem" }}>
+                        {dept}
+                      </Typography>
+                    </Box>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                      <LinearProgress
+                        variant="determinate"
+                        value={
+                          (count / Math.max(...sortedDepts.map(([, c]) => c))) *
+                          100
+                        }
+                        sx={{
+                          width: 80,
+                          height: 6,
+                          borderRadius: 3,
+                          bgcolor: "#e5e7eb",
+                          "& .MuiLinearProgress-bar": {
+                            bgcolor: "#7c3aed",
+                            borderRadius: 3,
+                          },
+                        }}
+                      />
+                      <Chip
+                        label={`${count}`}
+                        size="small"
+                        sx={{
+                          bgcolor: "#f0f4ff",
+                          color: "#7c3aed",
+                          fontWeight: 700,
+                          minWidth: 40,
+                        }}
+                      />
+                    </Box>
+                  </Box>
+                ))}
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+      )}
+    </Grid>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════════
+   MAIN DASHBOARD COMPONENT
+   ═══════════════════════════════════════════════════════════ */
 const DashboardPage = () => {
   const { user } = useAuth();
   const [leaves, setLeaves] = useState([]);
@@ -545,7 +2003,7 @@ const DashboardPage = () => {
         setAllUsers(u.data.filter((u2) => u2._id !== user?._id));
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [user]);
 
   if (loading)
     return (
@@ -566,6 +2024,7 @@ const DashboardPage = () => {
           l.status === "approved" && new Date(l.startDate).getMonth() === mi,
       ).length,
   );
+
   const monthlyPending = MONTHS.map(
     (_, mi) =>
       leaves.filter(
@@ -592,6 +2051,11 @@ const DashboardPage = () => {
       l.reason?.toLowerCase().includes(searchTx.toLowerCase()),
   );
 
+  // Render based on user role
+  const isFaculty = user?.role === "faculty";
+  const isHOD = user?.role === "hod";
+  const isAdmin = user?.role === "admin";
+
   return (
     <Box
       sx={{
@@ -603,231 +2067,126 @@ const DashboardPage = () => {
     >
       {/* ── Main column ───────────────────────────────── */}
       <Box sx={{ flex: 1, minWidth: 0 }}>
-        {/* Header */}
-        <Box sx={{ mb: 3 }}>
-          <Typography
-            variant="caption"
-            sx={{
-              color: "text.secondary",
-              fontWeight: 600,
-              textTransform: "uppercase",
-              letterSpacing: "0.06em",
-              fontSize: "0.7rem",
-            }}
-          >
-            Total Leave Days Used This Year
-          </Typography>
-          <Box
-            sx={{ display: "flex", alignItems: "flex-end", gap: 2, mt: 0.4 }}
-          >
-            <Typography
-              variant="h3"
-              sx={{
-                fontWeight: 900,
-                color: "text.primary",
-                letterSpacing: "-1px",
-                lineHeight: 1,
-              }}
-            >
-              {stats.totalDaysUsed}
+        {/* ── FACULTY DASHBOARD ── */}
+        {isFaculty && (
+          <Box>
+            <Box sx={{ mb: 3 }}>
               <Typography
-                component="span"
+                variant="h5"
                 sx={{
-                  fontSize: "1rem",
-                  fontWeight: 600,
-                  color: "text.secondary",
-                  ml: 0.8,
+                  fontWeight: 900,
+                  color: "text.primary",
+                  mb: 0.5,
                 }}
               >
-                days
+                Welcome, {user?.name?.split(" ")[0]}!
               </Typography>
-            </Typography>
-          </Box>
-          <Box sx={{ display: "flex", gap: 1, mt: 1.5, flexWrap: "wrap" }}>
-            {[
-              {
-                label: "Approved",
-                icon: <ArrowUpward sx={{ fontSize: 11 }} />,
-                color: "#059669",
-                bg: "#ecfdf5",
-                count: stats.approved,
-              },
-              {
-                label: "Pending",
-                icon: <ArrowDownward sx={{ fontSize: 11 }} />,
-                color: "#d97706",
-                bg: "#fffbeb",
-                count: stats.pending,
-              },
-              {
-                label: "Total Applied",
-                icon: <EventNote sx={{ fontSize: 11 }} />,
-                color: "#7c3aed",
-                bg: "#f5f3ff",
-                count: stats.total,
-              },
-            ].map((a) => (
-              <Chip
-                key={a.label}
-                icon={a.icon}
-                label={`${a.count} ${a.label}`}
-                size="small"
-                sx={{
-                  bgcolor: a.bg,
-                  color: a.color,
-                  fontWeight: 700,
-                  fontSize: "0.72rem",
-                  border: `1px solid ${a.color}20`,
-                  borderRadius: "8px",
-                  "& .MuiChip-icon": { color: a.color },
-                }}
-              />
-            ))}
-          </Box>
-        </Box>
+              <Typography sx={{ color: "text.secondary", fontSize: "0.95rem" }}>
+                Manage your leave requests and track approvals
+              </Typography>
+            </Box>
 
-        {/* Available substitutes */}
-        {allUsers.filter((u) => u.isAvailable).length > 0 && (
-          <Card sx={{ mb: 2.5, borderRadius: "8px" }}>
-            <CardContent sx={{ p: 2.5 }}>
-              <Typography
-                variant="caption"
+            <LeaveBalanceTiles balance={balance} />
+            <RequestStatusTracker leaves={leaves} />
+            <PersonalLeaveCalendar leaves={leaves} />
+
+            <Box sx={{ mb: 2.5 }}>
+              <Button
+                variant="contained"
                 sx={{
-                  color: "text.secondary",
+                  bgcolor: "#7c3aed",
+                  "&:hover": { bgcolor: "#6d28d9" },
+                  px: 3,
+                  py: 1.2,
                   fontWeight: 700,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.06em",
-                  fontSize: "0.67rem",
-                  display: "block",
-                  mb: 1.5,
                 }}
               >
-                Available Substitutes
-              </Typography>
-              <FacultyRow users={allUsers.filter((u) => u.isAvailable)} />
-            </CardContent>
-          </Card>
+                + Apply for Leave
+              </Button>
+            </Box>
+          </Box>
         )}
 
-        {/* Mini charts */}
-        <Grid container spacing={2} sx={{ mb: 2.5 }}>
-          {[
-            {
-              title: "Approved Leaves",
-              count: stats.approved,
-              data: monthlyApproved,
-              bar: "#bbf7d0",
-              accent: "#16a34a",
-              chipLabel: "Approved",
-              chipSx: { bgcolor: "#dcfce7", color: "#166534" },
-            },
-            {
-              title: "Pending Leaves",
-              count: stats.pending,
-              data: monthlyPending,
-              bar: "#fef08a",
-              accent: "#ca8a04",
-              chipLabel: "Need Review",
-              chipSx: { bgcolor: "#fef9c3", color: "#854d0e" },
-            },
-          ].map((item) => (
-            <Grid item xs={12} sm={6} key={item.title}>
-              <Card sx={{ borderRadius: "8px" }}>
-                <CardContent sx={{ p: 2.5 }}>
-                  <Box
-                    sx={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                    }}
-                  >
-                    <Typography
-                      variant="body2"
-                      sx={{ fontWeight: 600, color: "text.secondary" }}
-                    >
-                      {item.title}
-                    </Typography>
-                    <Chip
-                      label="This Year"
-                      size="small"
-                      sx={{
-                        bgcolor: "background.default",
-                        color: "text.secondary",
-                        fontSize: "0.67rem",
-                        border: "1px solid",
-                        borderColor: "divider",
-                        borderRadius: "8px",
-                      }}
-                    />
-                  </Box>
-                  <Box
-                    sx={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 1,
-                      mt: 0.5,
-                    }}
-                  >
-                    <Typography
-                      variant="h4"
-                      sx={{ fontWeight: 800, color: "text.primary" }}
-                    >
-                      {item.count}
-                    </Typography>
-                    <Chip
-                      size="small"
-                      label={item.chipLabel}
-                      sx={{
-                        ...item.chipSx,
-                        fontWeight: 700,
-                        fontSize: "0.67rem",
-                        height: 20,
-                        borderRadius: "8px",
-                      }}
-                    />
-                  </Box>
-                  <MiniBarChart
-                    data={item.data}
-                    barColor={item.bar}
-                    accentColor={item.accent}
-                  />
-                  <Box
-                    sx={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      mt: 0.5,
-                    }}
-                  >
-                    {[
-                      "J",
-                      "F",
-                      "M",
-                      "A",
-                      "M",
-                      "J",
-                      "J",
-                      "A",
-                      "S",
-                      "O",
-                      "N",
-                      "D",
-                    ].map((m, i) => (
-                      <Typography
-                        key={i}
-                        sx={{ fontSize: "0.55rem", color: "text.disabled" }}
-                      >
-                        {m}
-                      </Typography>
-                    ))}
-                  </Box>
-                </CardContent>
-              </Card>
-            </Grid>
-          ))}
-        </Grid>
+        {/* ── HOD DASHBOARD ── */}
+        {isHOD && (
+          <Box>
+            <Box sx={{ mb: 3 }}>
+              <Typography
+                variant="h5"
+                sx={{
+                  fontWeight: 900,
+                  color: "text.primary",
+                  mb: 0.5,
+                }}
+              >
+                HOD Dashboard
+              </Typography>
+              <Typography sx={{ color: "text.secondary", fontSize: "0.95rem" }}>
+                Manage department leaves and handle approvals
+              </Typography>
+            </Box>
 
-        {/* Leave history table */}
-        <Card sx={{ borderRadius: "8px" }}>
+            <LeaveBalanceTiles balance={balance} />
+
+            <Box sx={{ mb: 3 }}>
+              <Typography
+                sx={{
+                  fontWeight: 700,
+                  fontSize: "1.1rem",
+                  mb: 2,
+                  color: "text.primary",
+                }}
+              >
+                Department Management
+              </Typography>
+
+              <OverlapAlertsHOD
+                leaves={leaves}
+                userDepartment={user?.department}
+              />
+              <PendingApprovalsListHOD
+                leaves={leaves}
+                userDepartment={user?.department}
+              />
+              <HODLeaveMonthlyTable
+                leaves={leaves}
+                userDepartment={user?.department}
+              />
+              <DepartmentWhosOutCalendar
+                leaves={leaves}
+                userDepartment={user?.department}
+              />
+            </Box>
+          </Box>
+        )}
+
+        {/* ── ADMIN DASHBOARD ── */}
+        {isAdmin && (
+          <Box>
+            <Box sx={{ mb: 3 }}>
+              <Typography
+                variant="h5"
+                sx={{
+                  fontWeight: 900,
+                  color: "text.primary",
+                  mb: 0.5,
+                }}
+              >
+                Admin Dashboard
+              </Typography>
+              <Typography sx={{ color: "text.secondary", fontSize: "0.95rem" }}>
+                System-wide leave management and analytics
+              </Typography>
+            </Box>
+
+            <InstitutionalAnalytics leaves={leaves} allUsers={allUsers} />
+            <AdminLeaveMonthlyTable leaves={leaves} allUsers={allUsers} />
+            <FinalApprovalQueueAdmin leaves={leaves} />
+          </Box>
+        )}
+
+        {/* ── SHARED: Leave History ── */}
+        <Card sx={{ borderRadius: "8px", mt: 3 }}>
           <CardContent sx={{ p: 0 }}>
             <Box
               sx={{
@@ -874,29 +2233,6 @@ const DashboardPage = () => {
                     }}
                   />
                 </Box>
-                <Box
-                  sx={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 0.5,
-                    px: 1.2,
-                    py: 0.5,
-                    bgcolor: "background.default",
-                    border: "1px solid",
-                    borderColor: "divider",
-                    borderRadius: "8px",
-                    cursor: "pointer",
-                    "&:hover": { borderColor: "#c4b5fd" },
-                  }}
-                >
-                  <FilterList sx={{ fontSize: 14, color: "text.secondary" }} />
-                  <Typography
-                    variant="caption"
-                    sx={{ fontWeight: 600, color: "text.secondary" }}
-                  >
-                    Filter
-                  </Typography>
-                </Box>
               </Box>
             </Box>
 
@@ -932,7 +2268,7 @@ const DashboardPage = () => {
                 {filteredLeaves.slice(0, 7).map((leave) => {
                   const badge = statusBadge(leave.status);
                   const lColor = leaveTypeColor[leave.leaveType] || "#7c3aed";
-                  const emoji = leaveTypeEmoji[leave.leaveType] || "📋";
+                  const emoji = leaveTypeEmoji[leave.leaveType] || "��";
                   return (
                     <TableRow
                       key={leave._id}
@@ -1212,7 +2548,7 @@ const DashboardPage = () => {
           </CardContent>
         </Card>
 
-        {/* AI Actions */}
+        {/* Quick Actions */}
         <Card sx={{ borderRadius: "8px" }}>
           <CardContent sx={{ p: 2.5 }}>
             <Box
@@ -1224,7 +2560,7 @@ const DashboardPage = () => {
               }}
             >
               <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                AI Actions
+                Quick Actions
               </Typography>
               <Box
                 sx={{
@@ -1241,111 +2577,360 @@ const DashboardPage = () => {
               </Box>
             </Box>
 
-            {[
-              {
-                emoji: "⏳",
-                title: `${stats.pending} Pending`,
-                sub: "Needs Approval",
-                subColor: "#f59e0b",
-                dark: true,
-                arrow: true,
-              },
-              {
-                emoji: "✅",
-                title: `${stats.approved} Approved`,
-                sub: "Processed",
-                subColor: "#10b981",
-                dark: false,
-                arrow: false,
-              },
-              {
-                emoji: "🔄",
-                title: `${allUsers.filter((u) => u.isAvailable).length} Available`,
-                sub: "Substitutes Ready",
-                subColor: "#7c3aed",
-                dark: false,
-                arrow: false,
-              },
-            ].map((item, i) => (
-              <Box
-                key={i}
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 1.5,
-                  p: 1.4,
-                  borderRadius: "8px",
-                  bgcolor: item.dark ? "#0f172a" : "background.default",
-                  mb: i < 2 ? 1 : 0,
-                  cursor: "pointer",
-                  "&:hover": { opacity: 0.88 },
-                }}
-              >
+            {isFaculty && (
+              <>
+                {[
+                  {
+                    emoji: "⏳",
+                    title: `${stats.pending} Pending`,
+                    sub: "Needs Approval",
+                    subColor: "#f59e0b",
+                    dark: true,
+                    arrow: true,
+                  },
+                  {
+                    emoji: "✅",
+                    title: `${stats.approved} Approved`,
+                    sub: "Processed",
+                    subColor: "#10b981",
+                    dark: false,
+                    arrow: false,
+                  },
+                  {
+                    emoji: "🔄",
+                    title: `${allUsers.filter((u) => u.isAvailable).length} Available`,
+                    sub: "Substitutes Ready",
+                    subColor: "#7c3aed",
+                    dark: false,
+                    arrow: false,
+                  },
+                ].map((item, i) => (
+                  <Box
+                    key={i}
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 1.5,
+                      p: 1.4,
+                      borderRadius: "8px",
+                      bgcolor: item.dark ? "#0f172a" : "background.default",
+                      mb: i < 2 ? 1 : 0,
+                      cursor: "pointer",
+                      "&:hover": { opacity: 0.88 },
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: "8px",
+                        bgcolor: item.subColor + (item.dark ? "30" : "15"),
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: 14,
+                        flexShrink: 0,
+                      }}
+                    >
+                      {item.emoji}
+                    </Box>
+                    <Box sx={{ flex: 1 }}>
+                      <Typography
+                        sx={{
+                          fontWeight: 700,
+                          fontSize: "0.81rem",
+                          color: item.dark ? "white" : "text.primary",
+                        }}
+                      >
+                        {item.title}
+                      </Typography>
+                      <Typography
+                        sx={{
+                          color: item.subColor,
+                          fontWeight: 600,
+                          fontSize: "0.69rem",
+                        }}
+                      >
+                        {item.sub}
+                      </Typography>
+                    </Box>
+                    {item.arrow && (
+                      <KeyboardArrowRight
+                        sx={{ color: "rgba(255,255,255,0.3)", fontSize: 16 }}
+                      />
+                    )}
+                  </Box>
+                ))}
+
                 <Box
                   sx={{
-                    width: 32,
-                    height: 32,
+                    mt: 1.5,
+                    p: 1.4,
+                    bgcolor: "#f5f3ff",
                     borderRadius: "8px",
-                    bgcolor: item.subColor + (item.dark ? "30" : "15"),
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: 14,
-                    flexShrink: 0,
+                    border: "1px solid #e0d7ff",
                   }}
                 >
-                  {item.emoji}
-                </Box>
-                <Box sx={{ flex: 1 }}>
                   <Typography
                     sx={{
+                      color: "#6d28d9",
                       fontWeight: 700,
-                      fontSize: "0.81rem",
-                      color: item.dark ? "white" : "text.primary",
+                      fontSize: "0.74rem",
+                      mb: 0.2,
                     }}
                   >
-                    {item.title}
+                    {user?.department}
                   </Typography>
-                  <Typography
-                    sx={{
-                      color: item.subColor,
-                      fontWeight: 600,
-                      fontSize: "0.69rem",
-                    }}
-                  >
-                    {item.sub}
+                  <Typography sx={{ color: "#7c3aed", fontSize: "0.69rem" }}>
+                    {stats.total} total requests this year
                   </Typography>
                 </Box>
-                {item.arrow && (
-                  <KeyboardArrowRight
-                    sx={{ color: "rgba(255,255,255,0.3)", fontSize: 16 }}
-                  />
-                )}
-              </Box>
-            ))}
+              </>
+            )}
 
-            <Box
-              sx={{
-                mt: 1.5,
-                p: 1.4,
-                bgcolor: "#f5f3ff",
-                borderRadius: "8px",
-                border: "1px solid #e0d7ff",
-              }}
-            >
-              <Typography
+            {isHOD && (
+              <>
+                {[
+                  {
+                    emoji: "⏳",
+                    title: `${leaves.filter((l) => l.status === "pending" && l.faculty?.department === user?.department).length} Pending`,
+                    sub: "Awaiting Your Approval",
+                    subColor: "#f59e0b",
+                    dark: true,
+                  },
+                  {
+                    emoji: "👥",
+                    title: `${leaves.filter((l) => l.status === "approved" && l.faculty?.department === user?.department && new Date(l.endDate) >= new Date()).length} Out`,
+                    sub: "Currently on Leave",
+                    subColor: "#10b981",
+                    dark: false,
+                  },
+                  {
+                    emoji: "📋",
+                    title: "Manage Team",
+                    sub: "View Department",
+                    subColor: "#7c3aed",
+                    dark: false,
+                  },
+                ].map((item, i) => (
+                  <Box
+                    key={i}
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 1.5,
+                      p: 1.4,
+                      borderRadius: "8px",
+                      bgcolor: item.dark ? "#0f172a" : "background.default",
+                      mb: i < 2 ? 1 : 0,
+                      cursor: "pointer",
+                      "&:hover": { opacity: 0.88 },
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: "8px",
+                        bgcolor: item.subColor + (item.dark ? "30" : "15"),
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: 14,
+                        flexShrink: 0,
+                      }}
+                    >
+                      {item.emoji}
+                    </Box>
+                    <Box sx={{ flex: 1 }}>
+                      <Typography
+                        sx={{
+                          fontWeight: 700,
+                          fontSize: "0.81rem",
+                          color: item.dark ? "white" : "text.primary",
+                        }}
+                      >
+                        {item.title}
+                      </Typography>
+                      <Typography
+                        sx={{
+                          color: item.subColor,
+                          fontWeight: 600,
+                          fontSize: "0.69rem",
+                        }}
+                      >
+                        {item.sub}
+                      </Typography>
+                    </Box>
+                  </Box>
+                ))}
+
+                <Box
+                  sx={{
+                    mt: 1.5,
+                    p: 1.4,
+                    bgcolor: "#fef9c3",
+                    borderRadius: "8px",
+                    border: "1px solid #fcd34d",
+                  }}
+                >
+                  <Typography
+                    sx={{
+                      color: "#854d0e",
+                      fontWeight: 700,
+                      fontSize: "0.74rem",
+                      mb: 0.2,
+                    }}
+                  >
+                    {user?.department} Department
+                  </Typography>
+                  <Typography sx={{ color: "#d97706", fontSize: "0.69rem" }}>
+                    Manage approvals and team availability
+                  </Typography>
+                </Box>
+              </>
+            )}
+
+            {isAdmin && (
+              <>
+                {[
+                  {
+                    emoji: "⏳",
+                    title: `${leaves.filter((l) => l.status === "hod_approved").length} Pending`,
+                    sub: "Final Approvals",
+                    subColor: "#f59e0b",
+                    dark: true,
+                  },
+                  {
+                    emoji: "👥",
+                    title: `${leaves.filter((l) => l.status === "approved" && new Date(l.startDate) <= new Date() && new Date(l.endDate) >= new Date()).length} On Leave`,
+                    sub: "Today",
+                    subColor: "#ef4444",
+                    dark: false,
+                  },
+                  {
+                    emoji: "📊",
+                    title: "Analytics",
+                    sub: "View Reports",
+                    subColor: "#7c3aed",
+                    dark: false,
+                  },
+                ].map((item, i) => (
+                  <Box
+                    key={i}
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 1.5,
+                      p: 1.4,
+                      borderRadius: "8px",
+                      bgcolor: item.dark ? "#0f172a" : "background.default",
+                      mb: i < 2 ? 1 : 0,
+                      cursor: "pointer",
+                      "&:hover": { opacity: 0.88 },
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: "8px",
+                        bgcolor: item.subColor + (item.dark ? "30" : "15"),
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: 14,
+                        flexShrink: 0,
+                      }}
+                    >
+                      {item.emoji}
+                    </Box>
+                    <Box sx={{ flex: 1 }}>
+                      <Typography
+                        sx={{
+                          fontWeight: 700,
+                          fontSize: "0.81rem",
+                          color: item.dark ? "white" : "text.primary",
+                        }}
+                      >
+                        {item.title}
+                      </Typography>
+                      <Typography
+                        sx={{
+                          color: item.subColor,
+                          fontWeight: 600,
+                          fontSize: "0.69rem",
+                        }}
+                      >
+                        {item.sub}
+                      </Typography>
+                    </Box>
+                  </Box>
+                ))}
+
+                <Box
+                  sx={{
+                    mt: 1.5,
+                    p: 1.4,
+                    bgcolor: "#f0fdf4",
+                    borderRadius: "8px",
+                    border: "1px solid #bbf7d0",
+                  }}
+                >
+                  <Typography
+                    sx={{
+                      color: "#166534",
+                      fontWeight: 700,
+                      fontSize: "0.74rem",
+                      mb: 0.2,
+                    }}
+                  >
+                    System Overview
+                  </Typography>
+                  <Typography sx={{ color: "#10b981", fontSize: "0.69rem" }}>
+                    Monitor all leave requests across departments
+                  </Typography>
+                </Box>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* User Role Badge */}
+        <Card sx={{ borderRadius: "8px", bgcolor: "#f5f3ff" }}>
+          <CardContent sx={{ p: 2 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <Box
                 sx={{
-                  color: "#6d28d9",
-                  fontWeight: 700,
-                  fontSize: "0.74rem",
-                  mb: 0.2,
+                  width: 8,
+                  height: 8,
+                  borderRadius: "50%",
+                  bgcolor: isFaculty
+                    ? "#7c3aed"
+                    : isHOD
+                      ? "#f59e0b"
+                      : "#10b981",
                 }}
-              >
-                {user?.department}
-              </Typography>
-              <Typography sx={{ color: "#7c3aed", fontSize: "0.69rem" }}>
-                {stats.total} total requests this year
-              </Typography>
+              />
+              <Box>
+                <Typography
+                  sx={{
+                    fontSize: "0.7rem",
+                    color: "text.disabled",
+                    fontWeight: 600,
+                    textTransform: "uppercase",
+                  }}
+                >
+                  Your Role
+                </Typography>
+                <Typography sx={{ fontSize: "0.85rem", fontWeight: 700 }}>
+                  {isFaculty
+                    ? "Faculty Member"
+                    : isHOD
+                      ? "Head of Department"
+                      : "Administrator"}
+                </Typography>
+              </Box>
             </Box>
           </CardContent>
         </Card>
