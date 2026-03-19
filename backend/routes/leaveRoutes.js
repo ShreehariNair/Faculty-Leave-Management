@@ -5,6 +5,8 @@ const Leave = require("../models/leaveModel");
 const LeaveBalance = require("../models/leaveBalanceModel");
 const User = require("../models/userModel");
 const Notification = require("../models/notificationModel");
+const Timetable = require("../models/timetableModel");
+const FacultyTimetable = require("../models/facultyTimetableModel");
 const { protect } = require("../middleware/auth");
 const upload = require("../middleware/leaveUpload");
 
@@ -69,6 +71,92 @@ const getDeductionDays = (leave) => {
   if (leave.leaveType === "casual" && leave.dayType === "HALF") return 0.5;
   // Default: deduct workingDays if present, else totalDays
   return leave.workingDays || leave.totalDays;
+};
+
+const DAY_NAMES = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+];
+
+const enumerateDaysInclusive = (startDate, endDate) => {
+  const s = new Date(startDate);
+  const e = new Date(endDate);
+  s.setHours(0, 0, 0, 0);
+  e.setHours(0, 0, 0, 0);
+  const days = [];
+  const cur = new Date(s);
+  while (cur <= e) {
+    days.push(new Date(cur));
+    cur.setDate(cur.getDate() + 1);
+  }
+  return days;
+};
+
+const extractFacultySlotsFromTimetables = (timetables, facultyId, dayNameSet) => {
+  const fid = facultyId?.toString?.() ? facultyId.toString() : String(facultyId);
+  const slots = new Set();
+
+  for (const tt of timetables) {
+    const schedule = tt?.schedule;
+    if (!schedule) continue;
+
+    // Mongoose Map supports forEach
+    schedule.forEach((cell, key) => {
+      const day = String(key).split("-")[0];
+      if (!dayNameSet.has(day)) return;
+
+      if (!cell) return;
+      const cellFaculty = cell.faculty?.toString?.()
+        ? cell.faculty.toString()
+        : cell.faculty
+          ? String(cell.faculty)
+          : null;
+
+      if (cellFaculty && cellFaculty === fid) {
+        slots.add(String(key));
+        return;
+      }
+
+      const batches = Array.isArray(cell.batches) ? cell.batches : [];
+      for (const b of batches) {
+        const bf = b?.faculty?.toString?.() ? b.faculty.toString() : b?.faculty ? String(b.faculty) : null;
+        if (bf && bf === fid) {
+          slots.add(String(key));
+          return;
+        }
+      }
+    });
+  }
+
+  return slots;
+};
+
+const extractBusySlotsForCandidate = (timetables, candidateId, dayNameSet) => {
+  return extractFacultySlotsFromTimetables(timetables, candidateId, dayNameSet);
+};
+
+const computeLeaveAffectedSlotsFromFacultyUpload = async (facultyId, sd, ed) => {
+  const tt = await FacultyTimetable.findOne({ faculty: facultyId }).lean();
+  const busy = new Set((tt?.busySlots || []).map((s) => String(s)));
+  if (busy.size === 0) return new Set();
+
+  const dayNamesInRange = new Set(
+    enumerateDaysInclusive(sd, ed)
+      .map((d) => DAY_NAMES[d.getDay()])
+      .filter((n) => n !== "Sunday"),
+  );
+
+  const affected = new Set();
+  for (const slot of busy) {
+    const day = slot.split("-")[0];
+    if (dayNamesInRange.has(day)) affected.add(slot);
+  }
+  return affected;
 };
 
 /* ─────────────────────────────────────────────────────────────
@@ -265,13 +353,49 @@ router.post("/", protect, upload.single("attachment"), async (req, res) => {
       }
     }
 
-    // substitute auto-suggest
+    // ✅ Substitute auto-suggest using timetable availability (AI + schedule constraints)
+    const department = req.user.department;
+    const timetables = await Timetable.find({ department, isActive: true }).select(
+      "schedule department",
+    );
+
+    const dayNamesInRange = new Set(
+      enumerateDaysInclusive(sd, ed)
+        .map((d) => DAY_NAMES[d.getDay()])
+        .filter((n) => n !== "Sunday"),
+    );
+
+    // Find which timetable slots the requesting faculty actually teaches during the leave days
+    const affectedSlotsFromTimetable = extractFacultySlotsFromTimetables(
+      timetables,
+      req.user._id,
+      dayNamesInRange,
+    );
+
+    // If UI provided affectedClasses, merge them (optional)
+    const affectedSlots = new Set([
+      ...Array.from(affectedSlotsFromTimetable),
+      ...(affectedClasses || []),
+    ]);
+
     const availableFaculty = await User.find({
       isAvailable: true,
       role: "faculty",
+      department,
+    }).select("_id name email department subjects isAvailable");
+
+    const timetableFiltered = availableFaculty.filter((candidate) => {
+      if (candidate._id.toString() === req.user._id.toString()) return false;
+      if (affectedSlots.size === 0) return true; // nothing to check
+      const busy = extractBusySlotsForCandidate(timetables, candidate._id, dayNamesInRange);
+      for (const slot of affectedSlots) {
+        if (busy.has(String(slot))) return false;
+      }
+      return true;
     });
+
     const autoSub =
-      suggestSubstitutes(availableFaculty, req.user)[0]?._id || null;
+      suggestSubstitutes(timetableFiltered, req.user)[0]?._id || null;
     const history = await Leave.find({ faculty: req.user._id });
 
     const leave = await Leave.create({
@@ -295,7 +419,7 @@ router.post("/", protect, upload.single("attachment"), async (req, res) => {
       substituteRequested,
       substituteAssigned: autoSub,
 
-      affectedClasses: affectedClasses || [],
+      affectedClasses: Array.from(affectedSlots),
       isUrgent: isUrgent || false,
       isDuringExamPeriod: isDuringExamPeriod || false,
       isDuringTeaching: isDuringTeaching || false,
@@ -410,6 +534,81 @@ router.put("/:id/approve", protect, async (req, res) => {
       remarks: req.body.remarks || "",
     };
     await leave.save();
+
+    // ✅ On approval: assign substitute using uploaded faculty timetables (same department)
+    try {
+      if (!leave.substituteAssigned && leave.faculty?.department) {
+        const sd = new Date(leave.startDate);
+        const ed = new Date(leave.endDate);
+
+        // slots the requesting faculty is busy on those days (from their uploaded weekly timetable)
+        const affectedSlots = await computeLeaveAffectedSlotsFromFacultyUpload(
+          leave.faculty._id,
+          sd,
+          ed,
+        );
+
+        const candidates = await User.find({
+          role: "faculty",
+          isAvailable: true,
+          department: leave.faculty.department, // ✅ same department only
+          _id: { $ne: leave.faculty._id },
+        }).select("_id name email department subjects isAvailable");
+
+        let filtered = candidates;
+        if (affectedSlots.size > 0) {
+          const candidateIds = candidates.map((c) => c._id);
+          const tts = await FacultyTimetable.find({
+            faculty: { $in: candidateIds },
+          })
+            .select("faculty busySlots")
+            .lean();
+          const byFaculty = new Map(
+            tts.map((t) => [String(t.faculty), new Set((t.busySlots || []).map(String))]),
+          );
+
+          // If a candidate has no uploaded timetable, we treat them as "unknown availability" and allow them.
+          filtered = candidates.filter((c) => {
+            const busy = byFaculty.get(String(c._id));
+            if (!busy) return true;
+            for (const slot of affectedSlots) {
+              if (busy.has(String(slot))) return false;
+            }
+            return true;
+          });
+        }
+
+        const best =
+          suggestSubstitutes(filtered, leave.faculty)[0]?._id || null;
+
+        if (best) {
+          leave.substituteAssigned = best;
+          await leave.save();
+
+          await Notification.insertMany([
+            {
+              recipient: best,
+              sender: req.user._id,
+              type: "substitute_assigned",
+              message: `You have been assigned as a substitute for ${leave.faculty.name}'s leave (${new Date(
+                leave.startDate,
+              ).toDateString()} → ${new Date(leave.endDate).toDateString()}).`,
+              relatedLeave: leave._id,
+            },
+            {
+              recipient: leave.faculty._id,
+              sender: req.user._id,
+              type: "substitute_assigned",
+              message: "A substitute has been assigned for your approved leave.",
+              relatedLeave: leave._id,
+            },
+          ]);
+        }
+      }
+    } catch (e) {
+      // Keep approval successful even if assignment fails
+      console.error("Substitute auto-assign on approval failed:", e);
+    }
 
     // ✅ Deduct balance for tracked leave types
     const balKey = Leave.BALANCE_KEY_MAP[leave.leaveType];

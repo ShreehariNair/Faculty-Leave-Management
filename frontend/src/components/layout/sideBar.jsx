@@ -89,6 +89,12 @@ const navSections = [
         path: "/substitutes",
         roles: ["faculty", "admin", "hod"],
       },
+      {
+        label: "My Timetable",
+        icon: <Schedule fontSize="small" />,
+        path: "/my-timetable",
+        roles: ["faculty"],
+      },
     ],
   },
   {
