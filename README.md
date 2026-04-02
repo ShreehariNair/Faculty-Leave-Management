@@ -60,7 +60,7 @@ How to run the project.
 
 Comprehensive REST API reference (endpoints, request/response samples, and environment variables) is available on Postman:
 
-- Live docs: https://documenter.getpostman.com/view/46068711/2sBXinFq2U
+- Live docs: https://documenter.getpostman.com/view/46068711/2sBXiokVM7
 - Collection format: Exportable directly from the Postman page above for team import and testing.
 
 ## 📈 Results
