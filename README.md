@@ -1,4 +1,4 @@
-# Faculty Leave Management
+# 🎓 Faculty Leave Management System with AI-Powered Analytics
 
 [![JavaScript](https://img.shields.io/badge/JavaScript-99.9%25-yellow?style=flat-square)](https://github.com/ShreehariNair/Faculty-Leave-Management)
 [![React](https://img.shields.io/badge/React-v18-blue?style=flat-square&logo=react)](https://react.dev)
