@@ -9,17 +9,21 @@
 [![Google Gemini](https://img.shields.io/badge/Google_Gemini-AI-red?style=flat-square&logo=google)](https://ai.google.dev/gemini-api)
 
 ## 🎓 Academic Details
+
 - **Course:** Natural Language Processing (NLP)
 - **Class:** Semester VI (Third Year Engineering)
 - **College:** Pillai College of Engineering , You can learn more about the college by visiting the official website of Pillai College of Engineering. https://www.pce.ac.in/
 
 ## 📌 Overview
+
 Empowering Educational Institutions with Intelligent Leave Management & Predictive Analytics using NLP techniques for analyzing leave reasons and predicting patterns.
 
 ## 🎯 Objective
+
 Managing faculty leaves in educational institutions is complex, inefficient, and error-prone. This project solves this by applying NLP to analyze leave reasons, predict leave patterns, and provide intelligent recommendations for better management.
 
 ## 🧠 Technologies Used
+
 - JavaScript
 - Node.js
 - Express.js
@@ -31,10 +35,12 @@ Managing faculty leaves in educational institutions is complex, inefficient, and
 - Google Gemini (for AI predictions)
 
 ## 📊 Dataset
+
 - Source of dataset: Internal college faculty leave records
 - Description: Historical leave data including dates, types, reasons, and faculty details used for training predictive models.
 
 ## ⚙️ Installation
+
 Steps to run the project:
 
 ```bash
@@ -50,6 +56,7 @@ npm install
 ```
 
 ## ▶️ Usage
+
 How to run the project.
 
 1. Start the backend: cd backend && npm run dev
@@ -64,27 +71,41 @@ Comprehensive REST API reference (endpoints, request/response samples, and envir
 - Collection format: Exportable directly from the Postman page above for team import and testing.
 
 ## 📈 Results
+
 - Accuracy: Predictive model achieves 85% accuracy in identifying high-risk leave weeks
 - Outputs: Real-time analytics dashboard, leave approval notifications, substitute assignments
-- Screenshots: ![WhatsApp Image 2026-04-03 at 12 25 25 (1)](https://github.com/user-attachments/assets/36f1048b-d507-4c89-a968-fbb60738dfac)
-  # 
-![WhatsApp Image 2026-04-03 at 12 25 25](https://github.com/user-attachments/assets/51cb7d7d-8b90-42b5-86ec-af6560b5397b)
-
+- Screenshots: ![Faculty Leave Management Dashboard – Real-time visualization of leave statistics, approval workflows, and AI-driven insights for administrators](https://github.com/user-attachments/assets/36f1048b-d507-4c89-a968-fbb60738dfac)
+  #
+  ![Predictive Analytics Interface – Highlights predicted high-risk leave periods and presents recommendations powered by NLP analysis](https://github.com/user-attachments/assets/51cb7d7d-8b90-42b5-86ec-af6560b5397b)
 
 ## 🎥 Demo Video
-[https://youtu.be/-B4zAH8dOtQ?si=ThnbNFlkInMxyTM8]
 
-
+https://youtu.be/-B4zAH8dOtQ?si=ThnbNFlkInMxyTM8
 
 ## 👥 Team Members
-- Shreehari Nair
-- Pavithra Shine
+
+- Shreehari Nair (GitHub: @ShreehariNair)
+- Pavithra Shine (GitHub: @PavithraShine24)
+- Neha S Nair (GitHub: @nneha029)
+- Rahul Pananghattil (GitHub: @rahulpananghattil)
+- Rohith (GitHub: @Rohith26845)
+- Sauravkrishna Nair (GitHub: @SKN-24)
+- Chinmay (GitHub: @chinmay24comp-cmd)
+- Rishima Nair (GitHub: @rishimanair03)
 
 ## 📌 GitHub Contributions
-- Shreehari Nair – Full-stack development, AI integration, UI/UX design
-- Pavithra Shine – Timetable upload feature and automatic substitute assignment
+
+- @ShreehariNair – Core full-stack implementation, analytics dashboards, Gemini parsing, and UI enhancements
+- @PavithraShine24 – Timetable upload feature and automatic substitute assignment
+- @nneha029 – Updated apply leave flow, notifications model, leave balance page, and README edits
+- @rahulpananghattil – Added API documentation section and updated Postman live docs link
+- @Rohith26845 – Integrated Cloudinary for media handling
+- @SKN-24 – Added leave reason classifier AI feature
+- @chinmay24comp-cmd – Updated profile page UI
+- @rishimanair03 – Repository cleanup (removed patch file)
 
 ## 📚 References
+
 - Google Gemini API Documentation
 - Material UI Documentation
 - Chart.js Documentation

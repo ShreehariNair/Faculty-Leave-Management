@@ -70,5 +70,37 @@ router.delete("/avatar", protect, async (req, res) => {
     return res.status(500).json({ message: error.message || "Delete failed" });
   }
 });
+router.put("/change-password", protect, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body || {};
+    if (!currentPassword || !newPassword) {
+      return res
+        .status(400)
+        .json({ message: "Current and new password are required." });
+    }
 
+    if (String(newPassword).length < 6) {
+      return res
+        .status(400)
+        .json({ message: "New password must be at least 6 characters." });
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    const ok = await user.matchPassword(currentPassword);
+    if (!ok) {
+      return res
+        .status(400)
+        .json({ message: "Current password is incorrect." });
+    }
+
+    user.password = newPassword; // hashed by pre-save hook
+    await user.save();
+
+    return res.json({ message: "Password updated successfully." });
+  } catch (error) {
+    return res.status(500).json({ message: error.message || "Update failed" });
+  }
+});
 module.exports = router;

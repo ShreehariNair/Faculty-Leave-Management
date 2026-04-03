@@ -29,7 +29,8 @@ import { useAuth } from "../context/authContext";
 import { getAvatarUrl } from "../api/axiosInstance";
 
 const ProfilePage = () => {
-  const { user, updateProfile, uploadAvatar, removeAvatar } = useAuth();
+  const { user, updateProfile, uploadAvatar, removeAvatar, changePassword } =
+    useAuth();
   const fileInputRef = useRef(null);
 
   const avatarUrl = getAvatarUrl(user?.avatar);
@@ -47,7 +48,40 @@ const ProfilePage = () => {
   const [successMsg, setSuccessMsg] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const [previewUrl, setPreviewUrl] = useState(null);
+  const [pwdForm, setPwdForm] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  });
 
+  const handlePasswordChange = (e) =>
+    setPwdForm((f) => ({ ...f, [e.target.name]: e.target.value }));
+
+  const handleChangePassword = async () => {
+    if (!pwdForm.currentPassword || !pwdForm.newPassword) {
+      showError("Please fill all password fields.");
+      return;
+    }
+    if (pwdForm.newPassword.length < 6) {
+      showError("New password must be at least 6 characters.");
+      return;
+    }
+    if (pwdForm.newPassword !== pwdForm.confirmPassword) {
+      showError("New password and confirm password do not match.");
+      return;
+    }
+
+    try {
+      await changePassword({
+        currentPassword: pwdForm.currentPassword,
+        newPassword: pwdForm.newPassword,
+      });
+      showSuccess("Password updated successfully.");
+      setPwdForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
+    } catch (e) {
+      showError(e?.response?.data?.message || "Failed to update password.");
+    }
+  };
   const showSuccess = (msg) => {
     setSuccessMsg(msg);
     setTimeout(() => setSuccessMsg(""), 3500);
@@ -165,7 +199,14 @@ const ProfilePage = () => {
             Profile Photo
           </Typography>
 
-          <Box sx={{ display: "flex", alignItems: "center", gap: 3, flexWrap: "wrap" }}>
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: 3,
+              flexWrap: "wrap",
+            }}
+          >
             <Box sx={{ position: "relative" }}>
               <Avatar
                 src={displayAvatar || undefined}
@@ -266,7 +307,10 @@ const ProfilePage = () => {
                 )}
               </Box>
 
-              <Typography variant="caption" sx={{ color: "text.disabled", fontSize: "0.7rem" }}>
+              <Typography
+                variant="caption"
+                sx={{ color: "text.disabled", fontSize: "0.7rem" }}
+              >
                 Max 5MB · JPEG, PNG, WEBP, GIF
               </Typography>
             </Box>
@@ -284,7 +328,9 @@ const ProfilePage = () => {
 
       <Card sx={{ borderRadius: "8px" }}>
         <CardContent sx={{ p: 3 }}>
-          <Box sx={{ display: "flex", justifyContent: "space-between", mb: 2.5 }}>
+          <Box
+            sx={{ display: "flex", justifyContent: "space-between", mb: 2.5 }}
+          >
             <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
               Personal Information
             </Typography>
@@ -313,19 +359,43 @@ const ProfilePage = () => {
             </Grid>
 
             <Grid item xs={12} sm={6}>
-              <TextField fullWidth size="small" name="name" value={form.name} onChange={handleChange} />
+              <TextField
+                fullWidth
+                size="small"
+                name="name"
+                value={form.name}
+                onChange={handleChange}
+              />
             </Grid>
 
             <Grid item xs={12} sm={6}>
-              <TextField fullWidth size="small" name="phone" value={form.phone} onChange={handleChange} />
+              <TextField
+                fullWidth
+                size="small"
+                name="phone"
+                value={form.phone}
+                onChange={handleChange}
+              />
             </Grid>
 
             <Grid item xs={12} sm={6}>
-              <TextField fullWidth size="small" name="designation" value={form.designation} onChange={handleChange} />
+              <TextField
+                fullWidth
+                size="small"
+                name="designation"
+                value={form.designation}
+                onChange={handleChange}
+              />
             </Grid>
 
             <Grid item xs={12} sm={6}>
-              <TextField fullWidth size="small" name="subjects" value={form.subjects} onChange={handleChange} />
+              <TextField
+                fullWidth
+                size="small"
+                name="subjects"
+                value={form.subjects}
+                onChange={handleChange}
+              />
             </Grid>
           </Grid>
 
@@ -336,10 +406,63 @@ const ProfilePage = () => {
             onClick={handleSaveProfile}
             disabled={saving}
             startIcon={
-              saving ? <CircularProgress size={15} sx={{ color: "white" }} /> : <Save sx={{ fontSize: 16 }} />
+              saving ? (
+                <CircularProgress size={15} sx={{ color: "white" }} />
+              ) : (
+                <Save sx={{ fontSize: 16 }} />
+              )
             }
           >
             {saving ? "Saving…" : "Save Changes"}
+          </Button>
+        </CardContent>
+      </Card>
+      <Card sx={{ borderRadius: "8px", mt: 2.5 }}>
+        <CardContent sx={{ p: 3 }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 2 }}>
+            Change Password
+          </Typography>
+
+          <Grid container spacing={2}>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                size="small"
+                type="password"
+                name="currentPassword"
+                label="Current Password"
+                value={pwdForm.currentPassword}
+                onChange={handlePasswordChange}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                size="small"
+                type="password"
+                name="newPassword"
+                label="New Password"
+                value={pwdForm.newPassword}
+                onChange={handlePasswordChange}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                size="small"
+                type="password"
+                name="confirmPassword"
+                label="Confirm New Password"
+                value={pwdForm.confirmPassword}
+                onChange={handlePasswordChange}
+              />
+            </Grid>
+          </Grid>
+
+          <Divider sx={{ my: 2.5 }} />
+
+          <Button variant="contained" onClick={handleChangePassword}>
+            Update Password
           </Button>
         </CardContent>
       </Card>

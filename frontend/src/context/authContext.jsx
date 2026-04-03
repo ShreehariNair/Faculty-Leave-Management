@@ -40,7 +40,10 @@ export const AuthProvider = ({ children }) => {
     setUser(updated);
     return updated;
   };
-
+  const changePassword = async (payload) => {
+    const { data } = await API.put("/users/change-password", payload);
+    return data;
+  };
   /* Upload / replace avatar image */
   const uploadAvatar = async (file) => {
     const formData = new FormData();
@@ -72,6 +75,7 @@ export const AuthProvider = ({ children }) => {
         updateProfile,
         uploadAvatar,
         removeAvatar,
+        changePassword,
       }}
     >
       {children}

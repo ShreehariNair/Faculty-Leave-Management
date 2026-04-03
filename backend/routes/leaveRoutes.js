@@ -243,13 +243,14 @@ router.get("/ai-insights", protect, async (req, res) => {
   }
 });
 
-/* ─────────────────────────────────────────────────────────────
-   GET /api/leaves/substitutes
-   ───────────────────────────────────────────────────────────── */
 router.get("/substitutes", protect, async (req, res) => {
   try {
-    const available = await User.find({ isAvailable: true, role: "faculty" });
-    res.json(suggestSubstitutes(available, req.user));
+    const faculty = await User.find({
+      role: "faculty",
+      department: req.user.department,
+      _id: { $ne: req.user._id },
+    });
+    res.json(faculty);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -500,6 +501,42 @@ router.post("/", protect, upload.single("attachment"), async (req, res) => {
     res.status(201).json(populated);
   } catch (err) {
     res.status(err.statusCode || 500).json({ message: err.message });
+  }
+});
+
+/* ─────────────────────────────────────────────────────────────
+   PUT /api/leaves/:id/reject
+   ───────────────────────────────────────────────────────────── */
+router.put("/:id/reject", protect, async (req, res) => {
+  try {
+    if (req.user.role !== "hod" && req.user.role !== "admin") {
+      return res.status(403).json({ message: "HOD/Admin access required" });
+    }
+
+    const leave = await Leave.findById(req.params.id).populate("faculty");
+    if (!leave) return res.status(404).json({ message: "Leave not found" });
+
+    if (leave.status !== "pending" && leave.status !== "hod_approved") {
+      return res.status(400).json({
+        message: "Leave can only be rejected when pending or HOD-approved",
+      });
+    }
+
+    leave.status = "rejected";
+    leave.rejectionReason = req.body.rejectionReason || "";
+    await leave.save();
+
+    await Notification.create({
+      recipient: leave.faculty._id,
+      sender: req.user._id,
+      type: "leave_rejected",
+      message: `Your ${leave.leaveType} leave has been rejected by ${req.user.name}.`,
+      relatedLeave: leave._id,
+    });
+
+    res.json({ message: "Leave rejected", leave });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
 });
 

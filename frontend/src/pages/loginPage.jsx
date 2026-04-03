@@ -301,55 +301,20 @@ const LoginPage = () => {
               <Box
                 sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2.5 }}
               >
-                <Divider sx={{ flex: 1 }} />
                 <Typography
                   sx={{
                     fontSize: "0.78rem",
                     color: "#94a3b8",
                     fontWeight: 500,
                   }}
-                >
-                  OR
-                </Typography>
-                <Divider sx={{ flex: 1 }} />
+                ></Typography>
               </Box>
 
               {/* Sign up link */}
-              <Button
-                fullWidth
-                variant="outlined"
-                component={Link}
-                to="/register"
-                sx={{
-                  borderRadius: "10px",
-                  py: 1.2,
-                  fontWeight: 600,
-                  fontSize: "0.88rem",
-                  borderColor: "#e2e8f0",
-                  color: "#374151",
-                  textTransform: "none",
-                  "&:hover": { borderColor: "#94a3b8", bgcolor: "#f8fafc" },
-                }}
-              >
-                Create an account
-              </Button>
             </Box>
           </Box>
 
           {/* Footer */}
-          <Typography sx={{ fontSize: "0.75rem", color: "#94a3b8" }}>
-            By creating an account, you agree to our{" "}
-            <Typography
-              component="span"
-              sx={{
-                color: "#1976d2",
-                cursor: "pointer",
-                textDecoration: "underline",
-              }}
-            >
-              Terms of Use
-            </Typography>
-          </Typography>
         </Box>
 
         {/* ── Right panel — illustration ── */}

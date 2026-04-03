@@ -5,6 +5,7 @@ import { createTheme } from "@mui/material/styles";
 import { AuthProvider, useAuth } from "./context/authContext";
 import TimetableGenerationPage from "./pages/timetableGenerationPage";
 import TimetableEditorPage from "./pages/timetableEditorPage";
+import TeamShowcase from "./pages/TeamShowcase";
 
 import loginPage from "./pages/loginPage";
 import dashboardPage from "./pages/dashboardPage";
@@ -291,6 +292,7 @@ const AppRoutes = () => {
           </ProtectedLayout>
         }
       />
+      <Route path="/team-showcase" element={<TeamShowcase />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
