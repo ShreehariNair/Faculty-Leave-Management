@@ -15,6 +15,7 @@ import substitutePage from "./pages/substitutePage";
 import profilePage from "./pages/profilePage";
 import facultyDirectoryPage from "./pages/facultyDirectoryPage";
 import syllabusManagementPage from "./pages/syllabusManagementPage";
+import MyTimetablePage from "./pages/myTimetablePage";
 
 import SideBar from "./components/layout/sideBar";
 import NavBar from "./components/layout/navBar";
@@ -249,6 +250,16 @@ const AppRoutes = () => {
         element={
           <ProtectedLayout>
             <SubstitutePage />
+          </ProtectedLayout>
+        }
+      />
+      <Route
+        path="/my-timetable"
+        element={
+          <ProtectedLayout>
+            <RoleGuard allow={["faculty"]}>
+              <MyTimetablePage />
+            </RoleGuard>
           </ProtectedLayout>
         }
       />

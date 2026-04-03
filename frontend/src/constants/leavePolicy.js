@@ -3,6 +3,17 @@
    Must match backend leaveModel.js and leaveBalanceModel.js
    ───────────────────────────────────────────────────────────── */
 
+// ADD THIS at the very top (line 1):
+import {
+  BeachAccess,
+  LocalHospital,
+  Star,
+  Repeat,
+  AccountBalance,
+  PauseCircle,
+  WorkOff,
+} from "@mui/icons-material";
+
 export const ACADEMIC_YEAR_START_MONTH = 7; // August (0-indexed)
 export const ADVANCE_NOTICE_DAYS = 4;
 export const ADVANCE_NOTICE_EXEMPT = ["casual", "medical"];
@@ -115,49 +126,49 @@ export const LEAVE_TYPE_META = {
     label: "Casual Leave",
     color: "#7c3aed",
     bg: "#f5f3ff",
-    emoji: "🏖️",
+    icon: BeachAccess,
     code: "CL",
   },
   medical: {
     label: "Medical Leave",
     color: "#ef4444",
     bg: "#fee2e2",
-    emoji: "🏥",
+    icon: LocalHospital,
     code: "ML",
   },
   earned: {
     label: "Earned Leave",
     color: "#10b981",
     bg: "#ecfdf5",
-    emoji: "⭐",
+    icon: Star,
     code: "EL",
   },
   compensatory: {
     label: "Compensatory Leave",
     color: "#0891b2",
     bg: "#ecfeff",
-    emoji: "🔄",
+    icon: Repeat,
     code: "CO",
   },
   onDuty: {
     label: "On Duty",
     color: "#8b5cf6",
     bg: "#f5f3ff",
-    emoji: "🏛️",
+    icon: AccountBalance,
     code: "OD",
   },
   special: {
     label: "Special Leave",
     color: "#f59e0b",
     bg: "#fffbeb",
-    emoji: "📋",
+    icon: PauseCircle,
     code: "SP",
   },
   leaveWithoutPay: {
     label: "Leave Without Pay",
     color: "#64748b",
     bg: "#f1f5f9",
-    emoji: "⏸️",
+    icon: WorkOff,
     code: "LWP",
   },
 };

@@ -106,7 +106,6 @@ const LeaveBalancePage = () => {
         remaining: apiData ? apiData.total - apiData.used : ent.days,
         color: meta.color || "#7c3aed",
         bg: meta.bg || "#f5f3ff",
-        emoji: meta.emoji || "📋",
         payStatus: ent.payStatus,
         note: ent.note,
       };
@@ -200,7 +199,9 @@ const LeaveBalancePage = () => {
                         }}
                       >
                         {TYPE_ICON[row.code] || (
-                          <span style={{ fontSize: 16 }}>{row.emoji}</span>
+                          <PauseCircle
+                            sx={{ fontSize: 16, color: row.color }}
+                          />
                         )}
                       </Box>
                       <Box>
@@ -409,7 +410,11 @@ const LeaveBalancePage = () => {
                               fontSize: 12,
                             }}
                           >
-                            {meta.emoji || "📋"}
+                            {TYPE_ICON[BACKEND_TYPE_TO_CODE[lv.leaveType]] || (
+                              <PauseCircle
+                                sx={{ fontSize: 14, color: meta.color }}
+                              />
+                            )}
                           </Box>
                           <Typography
                             sx={{

@@ -24,6 +24,7 @@ app.use("/api/notifications", require("./routes/notificationRoutes"));
 app.use("/api/syllabus", syllabusRoutes);
 app.use("/api/analytics", require("./routes/analyticsRoutes"));
 app.use("/api/timetable", require("./routes/timetableRoutes"));
+app.use("/api/faculty-timetable", require("./routes/facultyTimetableRoutes"));
 
 app.get("/", (req, res) => res.send("Faculty Leave Management API Running"));
 

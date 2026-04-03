@@ -1,7 +1,19 @@
 import PredictiveInsightsCard from "../components/PredictiveInsightsCard";
 import DepartmentPredictiveCard from "../components/DepartmentPredictiveCard";
-import InsightsSkeleton from "../components/InsightsSkeleton";
-import React, { useEffect, useState } from "react";
+import LeaveAnalytics from "../components/LeaveAnalytics";
+import {
+  BeachAccess,
+  LocalHospital,
+  Star,
+  Repeat,
+  AccountBalance,
+  PauseCircle,
+  WorkOff,
+  Description,
+  HourglassEmpty,
+  People,
+} from "@mui/icons-material";
+import { useEffect, useState } from "react";
 import {
   Grid,
   Card,
@@ -42,6 +54,7 @@ import {
   Close,
   UnfoldMore,
   Info,
+  BarChart,
 } from "@mui/icons-material";
 import { useAuth } from "../context/authContext";
 import API, { getAvatarUrl } from "../api/axiosInstance";
@@ -61,14 +74,14 @@ const MONTHS = [
   "Dec",
 ];
 
-const leaveTypeEmoji = {
-  casual: "🏖",
-  medical: "🏥",
-  earned: "⭐",
-  compensatory: "🔄",
-  onDuty: "🏛️",
-  special: "📋",
-  leaveWithoutPay: "⏸️",
+const leaveTypeIcon = {
+  casual: BeachAccess,
+  medical: LocalHospital,
+  earned: Star,
+  compensatory: Repeat,
+  onDuty: AccountBalance,
+  special: PauseCircle,
+  leaveWithoutPay: WorkOff,
 };
 
 const leaveTypeColor = {
@@ -381,116 +394,245 @@ const CollegeStaffIDCard = ({ user }) => {
   );
 };
 
-/* ── Mini bar chart ──────────────────────────────────────── */
-const MiniBarChart = ({ data, barColor, accentColor }) => {
-  const max = Math.max(...data, 1);
-  return (
-    <Box
-      sx={{
-        display: "flex",
-        alignItems: "flex-end",
-        gap: "3px",
-        height: 72,
-        mt: 1.5,
-      }}
-    >
-      {data.map((v, i) => {
-        const isHighest = v === Math.max(...data) && v > 0;
-        return (
-          <Box
-            key={i}
-            sx={{
-              flex: 1,
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              gap: "2px",
-            }}
-          >
-            {isHighest && (
-              <Typography
-                sx={{
-                  fontSize: "0.6rem",
-                  color: "text.primary",
-                  fontWeight: 700,
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {v}
-              </Typography>
-            )}
-            <Box
-              sx={{
-                width: "100%",
-                height: `${Math.max((v / max) * 52, v > 0 ? 6 : 3)}px`,
-                borderRadius: "2px 2px 0 0",
-                bgcolor: isHighest ? accentColor : barColor,
-                transition: "height 0.3s",
-              }}
-            />
-          </Box>
-        );
-      })}
-    </Box>
-  );
-};
-
 /* ── Faculty quick-select row ────────────────────────────── */
-const FacultyRow = ({ users }) => {
+import FilterListIcon from "@mui/icons-material/FilterList";
+import UnfoldMoreIcon from "@mui/icons-material/UnfoldMore";
+import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
+import AccountBalanceIcon from "@mui/icons-material/AccountBalance"; // Used as a generic department icon
+
+const FacultyList = ({ users }) => {
   const colors = ["#7c3aed", "#0891b2", "#059669", "#d97706", "#dc2626"];
+
+  // Helper for mock data to fill out the UI exactly like the image
+  const getMockTags = (index) => {
+    const tagSets = [
+      [
+        { label: "Arts", color: "#8b5cf6", bg: "#ede9fe" },
+        { label: "Business", color: "#d97706", bg: "#fef3c7" },
+        { label: "Travel", color: "#e11d48", bg: "#ffe4e6" },
+      ],
+      [
+        { label: "Books", color: "#8b5cf6", bg: "#ede9fe" },
+        { label: "Computers", color: "#4f46e5", bg: "#e0e7ff" },
+      ],
+      [
+        { label: "Kitchen", color: "#d97706", bg: "#fef3c7" },
+        { label: "Books", color: "#374151", bg: "#f3f4f6" },
+      ],
+      [{ label: "Furniture", color: "#059669", bg: "#d1fae5" }],
+      [
+        { label: "Beauty", color: "#10b981", bg: "#d1fae5" },
+        { label: "Apparel", color: "#d97706", bg: "#fef3c7" },
+        { label: "Sale", color: "#e11d48", bg: "#ffe4e6" },
+      ],
+    ];
+    return tagSets[index % tagSets.length];
+  };
+
+  const getMockProgress = (index) => {
+    const widths = ["40%", "15%", "80%", "35%", "70%"];
+    return widths[index % widths.length];
+  };
+
+  // Assuming getAvatarUrl is defined elsewhere in your file
+  const getAvatarUrl = (avatar) => avatar;
+
   return (
     <Box
       sx={{
-        display: "flex",
-        alignItems: "center",
-        gap: 2,
-        overflowX: "auto",
-        "&::-webkit-scrollbar": { height: 0 },
+        backgroundColor: "#ffffff",
+        borderRadius: 4,
+        boxShadow: "0px 4px 20px rgba(0, 0, 0, 0.05)",
+        p: 4,
+        fontFamily: "sans-serif",
+        width: "100%",
+        maxWidth: 1200,
+        margin: "auto",
       }}
     >
-      {users.slice(0, 6).map((u, i) => (
-        <Box
-          key={u._id}
+      {/* Header Section */}
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          mb: 4,
+        }}
+      >
+        <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+          <Typography variant="h5" sx={{ fontWeight: 700, color: "#111827" }}>
+            Your Faculty
+          </Typography>
+          <Chip
+            label="New"
+            size="small"
+            sx={{
+              color: "#4f46e5",
+              backgroundColor: "#fff",
+              border: "1px solid #4f46e5",
+              fontWeight: 600,
+              height: 24,
+            }}
+          />
+        </Box>
+        <Button
+          variant="outlined"
+          startIcon={<FilterListIcon />}
           sx={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            gap: 0.5,
-            flexShrink: 0,
+            borderRadius: 8,
+            color: "#374151",
+            borderColor: "#e5e7eb",
+            textTransform: "none",
+            fontWeight: 600,
+            "&:hover": { borderColor: "#d1d5db", backgroundColor: "#f9fafb" },
           }}
         >
-          <Avatar
-            src={getAvatarUrl(u?.avatar) || undefined}
+          Filter
+        </Button>
+      </Box>
+
+      {/* Table Headers */}
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: "1.5fr 1.5fr 1.5fr 1fr",
+          alignItems: "center",
+          borderBottom: "1px solid #e5e7eb",
+          pb: 2,
+          mb: 1,
+        }}
+      >
+        {[
+          "Full Name",
+          "Department",
+          "Specialization",
+          "Engagement Percentage",
+        ].map((header, idx) => (
+          <Box
+            key={header}
+            sx={{ display: "flex", alignItems: "center", gap: 0.5 }}
+          >
+            <Typography
+              sx={{ fontWeight: 600, color: "#374151", fontSize: "0.875rem" }}
+            >
+              {header}
+            </Typography>
+            {(idx === 0 || idx === 3) && (
+              <UnfoldMoreIcon
+                sx={{ fontSize: 16, color: "#9ca3af", cursor: "pointer" }}
+              />
+            )}
+          </Box>
+        ))}
+      </Box>
+
+      {/* List / Rows */}
+      <Box sx={{ display: "flex", flexDirection: "column" }}>
+        {users.map((u, i) => (
+          <Box
+            key={u._id || i}
             sx={{
-              width: 42,
-              height: 42,
-              fontSize: 14,
-              fontWeight: 700,
-              background: getAvatarUrl(u?.avatar)
-                ? "none"
-                : `linear-gradient(135deg, ${colors[i % 5]}, ${colors[(i + 1) % 5]})`,
-              cursor: "pointer",
-              transition: "transform 0.15s",
-              "&:hover": { transform: "scale(1.06)" },
+              display: "grid",
+              gridTemplateColumns: "1.5fr 1.5fr 1.5fr 1fr",
+              alignItems: "center",
+              py: 2.5,
+              borderBottom: "1px solid #f3f4f6",
+              "&:last-child": { borderBottom: "none" },
             }}
           >
-            {!getAvatarUrl(u?.avatar) && u.name?.charAt(0)}
-          </Avatar>
-          <Typography
-            sx={{
-              fontSize: "0.68rem",
-              fontWeight: 600,
-              color: "text.primary",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {u.name?.split(" ")[0]}
-          </Typography>
-          <Typography sx={{ fontSize: "0.62rem", color: "text.disabled" }}>
-            {u.department?.split(" ")[0]}
-          </Typography>
-        </Box>
-      ))}
+            {/* Column 1: Avatar & Name */}
+            <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+              <Avatar
+                src={getAvatarUrl(u?.avatar) || undefined}
+                sx={{
+                  width: 44,
+                  height: 44,
+                  fontSize: 16,
+                  fontWeight: 600,
+                  background: getAvatarUrl(u?.avatar)
+                    ? "none"
+                    : `linear-gradient(135deg, ${colors[i % 5]}, ${colors[(i + 1) % 5]})`,
+                }}
+              >
+                {!getAvatarUrl(u?.avatar) && u.name?.charAt(0)}
+              </Avatar>
+              <Box>
+                <Typography
+                  sx={{ fontWeight: 600, color: "#111827", fontSize: "0.9rem" }}
+                >
+                  {u.name || "Unknown Faculty"}
+                </Typography>
+                <Typography sx={{ color: "#6b7280", fontSize: "0.8rem" }}>
+                  @{u.name?.toLowerCase().replace(/\s+/g, "") || "handle"}
+                </Typography>
+              </Box>
+            </Box>
+
+            {/* Column 2: Department (Replacing Payment Method) */}
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+              <AccountBalanceIcon sx={{ color: colors[i % 5], fontSize: 20 }} />
+              <Typography
+                sx={{ fontWeight: 500, color: "#374151", fontSize: "0.875rem" }}
+              >
+                {u.department || "General"} Dept.
+              </Typography>
+              {i % 2 !== 0 && (
+                <IconButton size="small" sx={{ p: 0 }}>
+                  <InfoOutlinedIcon sx={{ fontSize: 18, color: "#d1d5db" }} />
+                </IconButton>
+              )}
+            </Box>
+
+            {/* Column 3: Categories / Chips */}
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                gap: 1,
+                flexWrap: "wrap",
+              }}
+            >
+              {getMockTags(i).map((tag, tIdx) => (
+                <Chip
+                  key={tIdx}
+                  label={tag.label}
+                  size="small"
+                  sx={{
+                    backgroundColor: tag.bg,
+                    color: tag.color,
+                    fontWeight: 600,
+                    fontSize: "0.75rem",
+                    height: 22,
+                    border: "none",
+                  }}
+                />
+              ))}
+            </Box>
+
+            {/* Column 4: Engagement Bar (Replacing Clickthrough) */}
+            <Box sx={{ display: "flex", alignItems: "center" }}>
+              <Box
+                sx={{
+                  width: "100%",
+                  height: 8,
+                  backgroundColor: "#e0e7ff",
+                  borderRadius: 4,
+                  overflow: "hidden",
+                }}
+              >
+                <Box
+                  sx={{
+                    width: getMockProgress(i),
+                    height: "100%",
+                    backgroundColor: "#5a67d8",
+                    borderRadius: 4,
+                  }}
+                />
+              </Box>
+            </Box>
+          </Box>
+        ))}
+      </Box>
     </Box>
   );
 };
@@ -502,9 +644,14 @@ const FacultyRow = ({ users }) => {
 /* Leave Balance Tiles */
 const LeaveBalanceTiles = ({ balance }) => {
   const leaveTypes = [
-    { key: "casual", label: "Casual", color: "#7c3aed", emoji: "🏖" },
-    { key: "medical", label: "Medical", color: "#ef4444", emoji: "🏥" },
-    { key: "earned", label: "Earned", color: "#10b981", emoji: "⭐" },
+    { key: "casual", label: "Casual", color: "#7c3aed", icon: BeachAccess },
+    {
+      key: "medical",
+      label: "Medical",
+      color: "#ef4444",
+      icon: LocalHospital,
+    },
+    { key: "earned", label: "Earned", color: "#10b981", icon: Star },
   ];
 
   return (
@@ -533,7 +680,16 @@ const LeaveBalanceTiles = ({ balance }) => {
                     mb: 1.5,
                   }}
                 >
-                  <Box sx={{ fontSize: "1.8rem" }}>{type.emoji}</Box>
+                  <Box
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: "1.8rem",
+                    }}
+                  >
+                    <type.icon sx={{ fontSize: 28, color: type.color }} />
+                  </Box>{" "}
                   <Chip
                     label={`${pct.toFixed(0)}%`}
                     size="small"
@@ -1518,7 +1674,7 @@ const DepartmentWhosOutCalendar = ({ leaves, userDepartment }) => {
     <Card sx={{ mb: 2.5, borderRadius: "12px" }}>
       <CardContent sx={{ p: 2.5 }}>
         <Typography sx={{ fontWeight: 700, mb: 2, fontSize: "1rem" }}>
-          Department: Who's Out 👥
+          Department: Who's Out <People sx={{ fontSize: 18, ml: 0.5 }} />{" "}
         </Typography>
         {departmentOnLeave.length === 0 ? (
           <Typography sx={{ color: "text.disabled", fontSize: "0.9rem" }}>
@@ -1606,7 +1762,7 @@ const OverlapAlertsHOD = ({ leaves, userDepartment }) => {
     <Alert severity="warning" sx={{ mb: 2.5 }} icon={<Warning />}>
       <Box>
         <Typography sx={{ fontWeight: 700, mb: 1 }}>
-          ⚠️ Overlap Alert
+          <Warning sx={{ fontSize: 18, mr: 0.5 }} /> Overlap Alert
         </Typography>
         <Typography sx={{ fontSize: "0.9rem" }}>
           {criticalDates.length} date(s) have 3+ faculty on leave. Department
@@ -1998,22 +2154,8 @@ const DashboardPage = () => {
 
             <LeaveBalanceTiles balance={balance} />
             <RequestStatusTracker leaves={leaves} />
-            <PersonalLeaveCalendar leaves={leaves} />
 
-            <Box sx={{ mb: 2.5 }}>
-              <Button
-                variant="contained"
-                sx={{
-                  bgcolor: "#7c3aed",
-                  "&:hover": { bgcolor: "#6d28d9" },
-                  px: 3,
-                  py: 1.2,
-                  fontWeight: 700,
-                }}
-              >
-                + Apply for Leave
-              </Button>
-            </Box>
+            <LeaveAnalytics />
           </Box>
         )}
 
@@ -2089,7 +2231,7 @@ const DashboardPage = () => {
                 System-wide leave management and analytics
               </Typography>
             </Box>
-
+            <LeaveAnalytics />
             <InstitutionalAnalytics leaves={leaves} allUsers={allUsers} />
             <PredictiveInsightsCard />
             <AdminLeaveMonthlyTable leaves={leaves} allUsers={allUsers} />
@@ -2180,7 +2322,8 @@ const DashboardPage = () => {
                 {filteredLeaves.slice(0, 7).map((leave) => {
                   const badge = statusBadge(leave.status);
                   const lColor = leaveTypeColor[leave.leaveType] || "#7c3aed";
-                  const emoji = leaveTypeEmoji[leave.leaveType] || "��";
+                  const IconComponent = leaveTypeIcon[leave.leaveType];
+
                   return (
                     <TableRow
                       key={leave._id}
@@ -2207,7 +2350,7 @@ const DashboardPage = () => {
                           <Typography
                             sx={{ fontSize: "0.73rem", color: "text.disabled" }}
                           >
-                            📄
+                            <Description sx={{ fontSize: 16 }} />
                           </Typography>
                           <Typography
                             variant="caption"
@@ -2243,7 +2386,13 @@ const DashboardPage = () => {
                               flexShrink: 0,
                             }}
                           >
-                            {emoji}
+                            {IconComponent ? (
+                              <IconComponent
+                                sx={{ fontSize: 16, color: lColor }}
+                              />
+                            ) : (
+                              "📋"
+                            )}
                           </Box>
                           <Box>
                             <Typography
@@ -2493,7 +2642,7 @@ const DashboardPage = () => {
               <>
                 {[
                   {
-                    emoji: "⏳",
+                    icon: HourglassEmpty,
                     title: `${stats.pending} Pending`,
                     sub: "Needs Approval",
                     subColor: "#f59e0b",
@@ -2501,7 +2650,7 @@ const DashboardPage = () => {
                     arrow: true,
                   },
                   {
-                    emoji: "✅",
+                    icon: CheckCircle,
                     title: `${stats.approved} Approved`,
                     sub: "Processed",
                     subColor: "#10b981",
@@ -2509,7 +2658,7 @@ const DashboardPage = () => {
                     arrow: false,
                   },
                   {
-                    emoji: "🔄",
+                    icon: Repeat,
                     title: `${allUsers.filter((u) => u.isAvailable).length} Available`,
                     sub: "Substitutes Ready",
                     subColor: "#7c3aed",
@@ -2544,7 +2693,7 @@ const DashboardPage = () => {
                         flexShrink: 0,
                       }}
                     >
-                      {item.emoji}
+                      <item.icon sx={{ fontSize: 18, color: item.subColor }} />
                     </Box>
                     <Box sx={{ flex: 1 }}>
                       <Typography
@@ -2604,21 +2753,21 @@ const DashboardPage = () => {
               <>
                 {[
                   {
-                    emoji: "⏳",
+                    icon: TimerOutlined,
                     title: `${leaves.filter((l) => l.status === "pending" && l.faculty?.department === user?.department).length} Pending`,
                     sub: "Awaiting Your Approval",
                     subColor: "#f59e0b",
                     dark: true,
                   },
                   {
-                    emoji: "👥",
+                    icon: People,
                     title: `${leaves.filter((l) => l.status === "approved" && l.faculty?.department === user?.department && new Date(l.endDate) >= new Date()).length} Out`,
                     sub: "Currently on Leave",
                     subColor: "#10b981",
                     dark: false,
                   },
                   {
-                    emoji: "📋",
+                    icon: Description,
                     title: "Manage Team",
                     sub: "View Department",
                     subColor: "#7c3aed",
@@ -2652,7 +2801,7 @@ const DashboardPage = () => {
                         flexShrink: 0,
                       }}
                     >
-                      {item.emoji}
+                      <item.icon sx={{ fontSize: 18, color: item.subColor }} />
                     </Box>
                     <Box sx={{ flex: 1 }}>
                       <Typography
@@ -2707,21 +2856,21 @@ const DashboardPage = () => {
               <>
                 {[
                   {
-                    emoji: "⏳",
+                    icon: TimerOutlined,
                     title: `${leaves.filter((l) => l.status === "hod_approved").length} Pending`,
                     sub: "Final Approvals",
                     subColor: "#f59e0b",
                     dark: true,
                   },
                   {
-                    emoji: "👥",
+                    icon: People,
                     title: `${leaves.filter((l) => l.status === "approved" && new Date(l.startDate) <= new Date() && new Date(l.endDate) >= new Date()).length} On Leave`,
                     sub: "Today",
                     subColor: "#ef4444",
                     dark: false,
                   },
                   {
-                    emoji: "📊",
+                    icon: BarChart,
                     title: "Analytics",
                     sub: "View Reports",
                     subColor: "#7c3aed",
@@ -2755,7 +2904,7 @@ const DashboardPage = () => {
                         flexShrink: 0,
                       }}
                     >
-                      {item.emoji}
+                      <item.icon sx={{ fontSize: 18, color: item.subColor }} />
                     </Box>
                     <Box sx={{ flex: 1 }}>
                       <Typography
