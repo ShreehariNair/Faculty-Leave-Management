@@ -66,10 +66,15 @@ Comprehensive REST API reference (endpoints, request/response samples, and envir
 ## 📈 Results
 - Accuracy: Predictive model achieves 85% accuracy in identifying high-risk leave weeks
 - Outputs: Real-time analytics dashboard, leave approval notifications, substitute assignments
-- Screenshots: [Add screenshots here]
+- Screenshots: ![WhatsApp Image 2026-04-03 at 12 25 25 (1)](https://github.com/user-attachments/assets/36f1048b-d507-4c89-a968-fbb60738dfac)
+  # 
+![WhatsApp Image 2026-04-03 at 12 25 25](https://github.com/user-attachments/assets/51cb7d7d-8b90-42b5-86ec-af6560b5397b)
+
 
 ## 🎥 Demo Video
-[YouTube link here]
+[https://youtu.be/-B4zAH8dOtQ?si=ThnbNFlkInMxyTM8]
+
+
 
 ## 👥 Team Members
 - Shreehari Nair
