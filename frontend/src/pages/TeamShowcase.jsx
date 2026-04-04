@@ -1,7 +1,10 @@
 import React from "react";
+import { Button } from "@mui/material";
+import { useNavigate } from "react-router-dom";
 
 const TeamShowcase = () => {
   const youtubeUrl = "https://youtu.be/-B4zAH8dOtQ?si=ScU23Sf3zTuFrDET";
+  const navigate = useNavigate();
 
   const features = [
     {
@@ -225,6 +228,13 @@ const TeamShowcase = () => {
                 </div>
               ))}
             </div>
+            <Button
+              variant="contained"
+              color="primary"
+              onClick={() => navigate("/login")}
+            >
+              Go to Login
+            </Button>
           </div>
 
           {/* YouTube thumbnail redirect */}
