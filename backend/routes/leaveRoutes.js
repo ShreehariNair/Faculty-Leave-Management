@@ -518,8 +518,8 @@ router.post("/", protect, upload.single("attachment"), async (req, res) => {
       return true;
     });
 
-    const autoSub =
-      suggestSubstitutes(timetableFiltered, req.user)[0]?._id || null;
+    const autoSubResults = await suggestSubstitutes(timetableFiltered, req.user);
+    const autoSub = autoSubResults[0]?._id || null;
     const history = await Leave.find({ faculty: req.user._id });
 
     /* Upload attachment to Cloudinary if present */
@@ -760,8 +760,8 @@ router.put("/:id/approve", protect, async (req, res) => {
           });
         }
 
-        const best =
-          suggestSubstitutes(filtered, leave.faculty)[0]?._id || null;
+        const bestResults = await suggestSubstitutes(filtered, leave.faculty);
+        const best = bestResults[0]?._id || null;
 
         if (best) {
           leave.substituteAssigned = best;
