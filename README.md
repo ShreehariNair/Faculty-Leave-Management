@@ -36,7 +36,7 @@ Managing faculty leaves in educational institutions is complex, inefficient, and
 
 ## 📊 Dataset
 
-- Source of dataset: Internal college faculty leave records
+- Source of dataset: Sample dataset generated
 - Description: Historical leave data including dates, types, reasons, and faculty details used for training predictive models.
 
 ## ⚙️ Installation
