@@ -30,6 +30,7 @@ import {
   Cancel,
   HowToReg,
   Info,
+  AutoAwesome,
 } from "@mui/icons-material";
 import { useAuth } from "../context/authContext";
 import API from "../api/axiosInstance";
@@ -381,12 +382,29 @@ const ManageLeavesPage = () => {
 
                   <TableCell>
                     <Typography
-                      sx={{ fontSize: "0.75rem", color: "text.secondary" }}
+                      sx={{ fontSize: "0.75rem", color: "text.secondary", fontWeight: leave.substituteAssigned ? 700 : 400 }}
                     >
                       {leave.substituteAssigned?.name ||
                         leave.substituteRequested ||
                         "—"}
                     </Typography>
+                    {leave.substituteAssigned && (
+                      <Chip
+                        label="AI Assigned"
+                        size="small"
+                        icon={<AutoAwesome sx={{ fontSize: "10px !important", ml: 0.5 }} />}
+                        sx={{
+                          bgcolor: "#fdf4ff",
+                          color: "#c026d3",
+                          fontWeight: 800,
+                          fontSize: "0.55rem",
+                          height: 18,
+                          mt: 0.5,
+                          border: "1px solid #f5d0fe",
+                          "& .MuiChip-icon": { color: "#c026d3" },
+                        }}
+                      />
+                    )}
                   </TableCell>
 
                   <TableCell>
@@ -607,9 +625,21 @@ const ManageLeavesPage = () => {
                 {selected.faculty?.name} · {selected.faculty?.department}
               </Typography>
               <Divider sx={{ mb: 1.5 }} />
-              <Typography sx={{ fontSize: "0.8rem", color: "text.secondary" }}>
-                {selected.reason}
+              <Typography sx={{ fontSize: "0.8rem", color: "text.secondary", mb: 2 }}>
+                <strong>Reason:</strong> {selected.reason}
               </Typography>
+              
+              {selected.substituteAssigned && (
+                <Box sx={{ bgcolor: "#fdf4ff", p: 1.5, borderRadius: "8px", border: "1px solid #f5d0fe", mt: 2 }}>
+                   <Typography sx={{ fontSize: "0.75rem", fontWeight: 800, color: "#c026d3", display: "flex", alignItems: "center", gap: 0.5, mb: 0.5 }}>
+                      <AutoAwesome sx={{ fontSize: 14 }} /> AI Load-Balanced Assignment
+                   </Typography>
+                   <Typography sx={{ fontSize: "0.75rem", color: "#a21caf", lineHeight: 1.4 }}>
+                      Assigned to: <strong>{selected.substituteAssigned.name}</strong><br/>
+                      This faculty was optimally matched to balance departmental workload, align peer designation, and ensure subject expertise continuity.
+                   </Typography>
+                </Box>
+              )}
             </DialogContent>
             <DialogActions sx={{ px: 3, pb: 2 }}>
               <Button onClick={() => setSelected(null)}>Close</Button>
