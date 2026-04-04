@@ -23,20 +23,63 @@ const predictLeaveRisk = (leaveHistory) => {
   );
 };
 
-const suggestSubstitutes = (availableFaculty, requestingFaculty) => {
-  return availableFaculty
+const mongoose = require("mongoose");
+
+const getLeaveModel = () => mongoose.models.Leave || mongoose.model("Leave");
+
+const suggestSubstitutes = async (availableFaculty, requestingFaculty) => {
+  const Leave = getLeaveModel();
+  
+  // Predict current substitute workload to balance load amongst faculty
+  const now = new Date();
+  const futureLeaves = await Leave.find({
+    substituteAssigned: { $in: availableFaculty.map(f => f._id) },
+    status: { $in: ['pending', 'hod_approved', 'approved'] },
+    endDate: { $gte: now }
+  });
+
+  const substituteLoadMap = {};
+  futureLeaves.forEach(l => {
+    if (!l.substituteAssigned) return;
+    const subId = l.substituteAssigned.toString();
+    substituteLoadMap[subId] = (substituteLoadMap[subId] || 0) + (l.totalDays || 1);
+  });
+
+  const scoredCandidates = availableFaculty
     .filter((f) => f._id.toString() !== requestingFaculty._id.toString())
     .map((faculty) => {
       let score = 0;
-      if (faculty.department === requestingFaculty.department) score += 40;
+      
+      // 1. Department match
+      if (faculty.department === requestingFaculty.department) score += 50;
+      
+      // 2. Availability priority
       if (faculty.isAvailable) score += 30;
-      const common = (faculty.subjects || []).filter((s) =>
+      
+      // 3. Subject expertise match
+      const commonSubjects = (faculty.subjects || []).filter((s) =>
         (requestingFaculty.subjects || []).includes(s),
       );
-      score += common.length * 15;
+      score += commonSubjects.length * 20;
+
+      // 4. Designation match (Prefer peers covering for each other)
+      if (faculty.designation && requestingFaculty.designation && faculty.designation === requestingFaculty.designation) {
+        score += 15;
+      }
+
+      // 5. Workload balancing (Penalize heavily if they already have substitute duties)
+      const currentLoad = substituteLoadMap[faculty._id.toString()] || 0;
+      score -= (currentLoad * 10); 
+      
       return { faculty, score };
+    });
+
+  // Sort primarily by score descending, then randomly to distribute load among equals
+  return scoredCandidates
+    .sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      return Math.random() - 0.5; // randomize tie-breakers
     })
-    .sort((a, b) => b.score - a.score)
     .slice(0, 3)
     .map((i) => i.faculty);
 };
