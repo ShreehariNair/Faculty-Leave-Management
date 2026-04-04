@@ -590,9 +590,7 @@ const SyllabusManagementPage = () => {
                                   onClick={() =>
                                     navigate(`/syllabus/${syllabus._id}`)
                                   }
-                                >
-                                  View
-                                </Button>
+                                ></Button>
                                 {!syllabus.facultyAssigned && (
                                   <Button
                                     size="small"
@@ -723,16 +721,6 @@ const SyllabusManagementPage = () => {
                             </TableCell>
                             <TableCell>
                               <Box sx={{ display: "flex", gap: 1 }}>
-                                <Button
-                                  size="small"
-                                  variant="outlined"
-                                  startIcon={<Visibility />}
-                                  onClick={() =>
-                                    navigate(`/syllabus/${syllabus._id}`)
-                                  }
-                                >
-                                  View
-                                </Button>
                                 {!syllabus.facultyAssigned && (
                                   <Button
                                     size="small"

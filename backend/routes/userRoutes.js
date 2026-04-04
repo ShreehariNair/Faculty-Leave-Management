@@ -103,4 +103,37 @@ router.put("/change-password", protect, async (req, res) => {
     return res.status(500).json({ message: error.message || "Update failed" });
   }
 });
+
+/**
+ * GET /api/users/faculty/department
+ * Get all faculty members in the HOD's department
+ * HOD only
+ */
+router.get("/faculty/department", protect, async (req, res) => {
+  try {
+    // Only HOD can fetch faculty in their department
+    if (req.user.role !== "hod") {
+      return res.status(403).json({
+        message: "Only HOD can view faculty members",
+      });
+    }
+
+    const faculty = await User.find({
+      department: req.user.department,
+      role: { $in: ["faculty", "hod"] }, // Include both faculty and HOD
+      isAvailable: true,
+    }).select("_id name email role department designation");
+
+    if (!faculty || faculty.length === 0) {
+      return res.status(200).json([]);
+    }
+
+    return res.json(faculty);
+  } catch (error) {
+    console.error("Fetch faculty error:", error);
+    return res.status(500).json({
+      message: error.message || "Failed to fetch faculty",
+    });
+  }
+});
 module.exports = router;

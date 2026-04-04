@@ -14,7 +14,6 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-/* ── Serve uploaded files as static ── */
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 app.use("/api/auth", require("./routes/authRoutes"));
@@ -28,5 +27,4 @@ app.use("/api/faculty-timetable", require("./routes/facultyTimetableRoutes"));
 
 app.get("/", (req, res) => res.send("Faculty Leave Management API Running"));
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+module.exports = app;

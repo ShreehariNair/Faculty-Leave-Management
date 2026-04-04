@@ -60,6 +60,13 @@ const TeamShowcase = () => {
       primary: true,
     },
     {
+      name: "Pavithra Shine",
+      username: "@PavithraShine24",
+      contributions: "1 CONTRIBUTION",
+      role: "Backend Developer. Handling scheduling and automation logic.",
+      commits: "Added timetable upload and auto substitute assignment engine.",
+    },
+    {
       name: "Neha S Nair",
       username: "@nneha029",
       contributions: "4 CONTRIBUTIONS",
@@ -67,13 +74,7 @@ const TeamShowcase = () => {
       commits:
         "Update leaveBalancePage, update notificationModel, update applyLeavePage, README documentation.",
     },
-    {
-      name: "Pavithra Shine",
-      username: "@PavithraShine24",
-      contributions: "1 CONTRIBUTION",
-      role: "Backend Developer. Handling scheduling and automation logic.",
-      commits: "Added timetable upload and auto substitute assignment engine.",
-    },
+
     {
       name: "Rahul Pananghattil",
       username: "@rahulpananghattil",
@@ -103,6 +104,13 @@ const TeamShowcase = () => {
       role: "Frontend Developer. Profile UX and interface refinement.",
       commits: "Profile page enhancements and UI consistency updates.",
       centerOnLarge: true,
+    },
+    {
+      name: "Rishima Nair",
+      username: "@rishimanair03",
+      contributions: "1 CONTRIBUTION",
+      role: "Backend Developer. Repository maintenance and code cleanup.",
+      commits: "Repository cleanup (removed patch file).",
     },
   ];
 
