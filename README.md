@@ -36,7 +36,7 @@ Managing faculty leaves in educational institutions is complex, inefficient, and
 
 ## 📊 Dataset
 
-- Source of dataset: Internal college faculty leave records
+- Source of dataset: Sample dataset generated
 - Description: Historical leave data including dates, types, reasons, and faculty details used for training predictive models.
 
 ## ⚙️ Installation
@@ -84,14 +84,17 @@ https://youtu.be/-B4zAH8dOtQ?si=ThnbNFlkInMxyTM8
 
 ## 👥 Team Members
 
-- Shreehari Nair (GitHub: @ShreehariNair)
-- Pavithra Shine (GitHub: @PavithraShine24)
-- Neha S Nair (GitHub: @nneha029)
-- Rahul Pananghattil (GitHub: @rahulpananghattil)
-- Rohith (GitHub: @Rohith26845)
-- Sauravkrishna Nair (GitHub: @SKN-24)
-- Chinmay (GitHub: @chinmay24comp-cmd)
-- Rishima Nair (GitHub: @rishimanair03)
+- Shreehari Nair
+- Pavithra Shine
+- Neha S Nair
+- Rahul Pananghattil
+- Rohith Nair
+- Sauravkrishna Nair
+- Chinmay Patil
+- Rishima Nair
+- Sachin Nair
+- Bhavesh Patil
+- Harshal Patil
 
 ## 📌 GitHub Contributions
 
