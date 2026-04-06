@@ -193,7 +193,14 @@ const AppRoutes = () => {
         path="/login"
         element={user ? <Navigate to="/" replace /> : <LoginPage />}
       />
-      <Route path="/" element={<TeamShowcase />} />
+      <Route
+        path="/"
+        element={
+          <ProtectedLayout>
+            <DashboardPage />
+          </ProtectedLayout>
+        }
+      />
       <Route
         path="/apply-leave"
         element={
