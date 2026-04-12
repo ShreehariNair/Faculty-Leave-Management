@@ -106,7 +106,6 @@ https://youtu.be/-B4zAH8dOtQ?si=ThnbNFlkInMxyTM8
 - @SKN-24 – Added leave reason classifier AI feature
 - @chinmay24comp-cmd – Updated profile page UI
 - @rishimanair03 – Repository cleanup (removed patch file)
-- @harshalpatil - Enhance AI substitute assignment & workload balancing algorithm and update UI
 
 ## 📚 References
 
