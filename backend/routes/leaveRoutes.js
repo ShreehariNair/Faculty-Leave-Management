@@ -123,7 +123,6 @@ const extractFacultySlotsFromTimetables = (
     const schedule = tt?.schedule;
     if (!schedule) continue;
 
-    // Mongoose Map supports forEach
     schedule.forEach((cell, key) => {
       const day = String(key).split("-")[0];
       if (!dayNameSet.has(day)) return;
@@ -206,6 +205,7 @@ router.get("/", protect, async (req, res) => {
 
 /* ─────────────────────────────────────────────────────────────
    GET /api/leaves/balance
+   Returns current faculty's leave balance with remaining days
    ───────────────────────────────────────────────────────────── */
 router.get("/balance", protect, async (req, res) => {
   try {
@@ -217,8 +217,104 @@ router.get("/balance", protect, async (req, res) => {
 });
 
 /* ─────────────────────────────────────────────────────────────
+   GET /api/leaves/balance/all       (HOD / Admin only)
+   Returns leave balances for all faculty in the department
+   ───────────────────────────────────────────────────────────── */
+router.get("/balance/all", protect, async (req, res) => {
+  try {
+    if (req.user.role === "faculty") {
+      return res.status(403).json({ message: "HOD/Admin access required" });
+    }
+
+    // HOD: their department only. Admin: everyone.
+    const userFilter =
+      req.user.role === "hod"
+        ? { role: "faculty", department: req.user.department }
+        : { role: "faculty" };
+
+    const facultyList = await User.find(userFilter).select("_id name email department");
+    const facultyIds = facultyList.map((f) => f._id);
+
+    // Ensure balance records exist for all faculty
+    const balances = await Promise.all(
+      facultyIds.map((id) => LeaveBalance.getOrCreateForUser(id))
+    );
+
+    // Attach faculty info to each balance
+    const result = balances.map((bal) => {
+      const faculty = facultyList.find(
+        (f) => f._id.toString() === bal.faculty.toString()
+      );
+      return { ...bal.toJSON(), facultyInfo: faculty };
+    });
+
+    res.json({ success: true, data: result });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+/* ─────────────────────────────────────────────────────────────
+   GET /api/leaves/balance/:facultyId   (HOD / Admin only)
+   Returns a specific faculty member's leave balance
+   ───────────────────────────────────────────────────────────── */
+router.get("/balance/:facultyId", protect, async (req, res) => {
+  try {
+    if (req.user.role === "faculty") {
+      return res.status(403).json({ message: "HOD/Admin access required" });
+    }
+
+    const faculty = await User.findById(req.params.facultyId).select("name email department");
+    if (!faculty) {
+      return res.status(404).json({ message: "Faculty not found" });
+    }
+
+    // HOD can only view their own department's faculty
+    if (req.user.role === "hod" && faculty.department !== req.user.department) {
+      return res.status(403).json({ message: "You can only view your department's faculty" });
+    }
+
+    const balance = await LeaveBalance.getOrCreateForUser(req.params.facultyId);
+    res.json({ success: true, data: { ...balance.toJSON(), facultyInfo: faculty } });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+/* ─────────────────────────────────────────────────────────────
+   PUT /api/leaves/balance/:facultyId   (Admin only)
+   Manually override a specific leave type total
+   Body: { leaveType: "casual", total: 10 }
+   ───────────────────────────────────────────────────────────── */
+router.put("/balance/:facultyId", protect, async (req, res) => {
+  try {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ message: "Admin access required" });
+    }
+
+    const { leaveType, total } = req.body;
+    const validTypes = ["casual", "medical", "earned", "compensatory", "onDuty", "special", "leaveWithoutPay"];
+
+    if (!validTypes.includes(leaveType)) {
+      return res.status(400).json({ message: `Invalid leaveType. Allowed: ${validTypes.join(", ")}` });
+    }
+    if (typeof total !== "number" || total < 0) {
+      return res.status(400).json({ message: "total must be a non-negative number" });
+    }
+
+    const balance = await LeaveBalance.getOrCreateForUser(req.params.facultyId);
+    balance[leaveType].total = total;
+    await balance.save();
+
+    res.json({ success: true, message: `${leaveType} leave total updated to ${total}`, data: balance });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+/* ─────────────────────────────────────────────────────────────
    GET /api/leaves/ai-insights
-   ──────────────���────────────────────────────────────────────── */
+   ───────────────────────────────────────────────────────────── */
 router.get("/ai-insights", protect, async (req, res) => {
   try {
     const leaveHistory = await Leave.find({
@@ -303,7 +399,7 @@ router.post("/", protect, upload.single("attachment"), async (req, res) => {
         .json({ message: "endDate cannot be before startDate." });
     }
 
-    // CO restriction (you already had)
+    // CO restriction
     const adminOnly = ["compensatory"];
     if (adminOnly.includes(leaveType) && req.user.role === "faculty") {
       return res.status(400).json({
@@ -357,7 +453,7 @@ router.post("/", protect, upload.single("attachment"), async (req, res) => {
       });
     }
 
-    // balance check for tracked leave
+    // ✅ Balance check for tracked leave types — with remaining info in response
     if (TRACKED_LEAVE_TYPES.includes(leaveType)) {
       const balance = await LeaveBalance.getOrCreateForUser(req.user._id);
       const balKey = Leave.BALANCE_KEY_MAP[leaveType];
@@ -378,7 +474,7 @@ router.post("/", protect, upload.single("attachment"), async (req, res) => {
       }
     }
 
-    // ✅ Substitute auto-suggest using timetable availability (AI + schedule constraints)
+    // Substitute auto-suggest using timetable availability
     const department = req.user.department;
     const timetables = await Timetable.find({
       department,
@@ -391,14 +487,12 @@ router.post("/", protect, upload.single("attachment"), async (req, res) => {
         .filter((n) => n !== "Sunday"),
     );
 
-    // Find which timetable slots the requesting faculty actually teaches during the leave days
     const affectedSlotsFromTimetable = extractFacultySlotsFromTimetables(
       timetables,
       req.user._id,
       dayNamesInRange,
     );
 
-    // If UI provided affectedClasses, merge them (optional)
     const affectedSlots = new Set([
       ...Array.from(affectedSlotsFromTimetable),
       ...(affectedClasses || []),
@@ -412,7 +506,7 @@ router.post("/", protect, upload.single("attachment"), async (req, res) => {
 
     const timetableFiltered = availableFaculty.filter((candidate) => {
       if (candidate._id.toString() === req.user._id.toString()) return false;
-      if (affectedSlots.size === 0) return true; // nothing to check
+      if (affectedSlots.size === 0) return true;
       const busy = extractBusySlotsForCandidate(
         timetables,
         candidate._id,
@@ -506,6 +600,7 @@ router.post("/", protect, upload.single("attachment"), async (req, res) => {
 
 /* ─────────────────────────────────────────────────────────────
    PUT /api/leaves/:id/reject
+   ✅ Now restores balance if leave was already approved
    ───────────────────────────────────────────────────────────── */
 router.put("/:id/reject", protect, async (req, res) => {
   try {
@@ -520,6 +615,15 @@ router.put("/:id/reject", protect, async (req, res) => {
       return res.status(400).json({
         message: "Leave can only be rejected when pending or HOD-approved",
       });
+    }
+
+    // ✅ If leave was already approved and balance was deducted, restore it
+    if (leave.status === "approved") {
+      const balKey = Leave.BALANCE_KEY_MAP[leave.leaveType];
+      if (balKey && TRACKED_LEAVE_TYPES.includes(leave.leaveType)) {
+        const deduction = getDeductionDays(leave);
+        await LeaveBalance.restoreBalance(leave.faculty._id, balKey, deduction);
+      }
     }
 
     leave.status = "rejected";
@@ -588,7 +692,7 @@ router.put("/:id/hod-approve", protect, async (req, res) => {
 
 /* ─────────────────────────────────────────────────────────────
    PUT /api/leaves/:id/approve (Principal/Admin final)
-   Deduct leave balance here (policy)
+   ✅ Deducts leave balance after full approval
    ───────────────────────────────────────────────────────────── */
 router.put("/:id/approve", protect, async (req, res) => {
   try {
@@ -612,13 +716,12 @@ router.put("/:id/approve", protect, async (req, res) => {
     };
     await leave.save();
 
-    // ✅ On approval: assign substitute using uploaded faculty timetables (same department)
+    // ✅ Assign substitute using uploaded faculty timetables
     try {
       if (!leave.substituteAssigned && leave.faculty?.department) {
         const sd = new Date(leave.startDate);
         const ed = new Date(leave.endDate);
 
-        // slots the requesting faculty is busy on those days (from their uploaded weekly timetable)
         const affectedSlots = await computeLeaveAffectedSlotsFromFacultyUpload(
           leave.faculty._id,
           sd,
@@ -628,7 +731,7 @@ router.put("/:id/approve", protect, async (req, res) => {
         const candidates = await User.find({
           role: "faculty",
           isAvailable: true,
-          department: leave.faculty.department, // ✅ same department only
+          department: leave.faculty.department,
           _id: { $ne: leave.faculty._id },
         }).select("_id name email department subjects isAvailable");
 
@@ -647,7 +750,6 @@ router.put("/:id/approve", protect, async (req, res) => {
             ]),
           );
 
-          // If a candidate has no uploaded timetable, we treat them as "unknown availability" and allow them.
           filtered = candidates.filter((c) => {
             const busy = byFaculty.get(String(c._id));
             if (!busy) return true;
@@ -687,7 +789,6 @@ router.put("/:id/approve", protect, async (req, res) => {
         }
       }
     } catch (e) {
-      // Keep approval successful even if assignment fails
       console.error("Substitute auto-assign on approval failed:", e);
     }
 
@@ -716,6 +817,54 @@ router.put("/:id/approve", protect, async (req, res) => {
     });
 
     res.json({ message: "Leave approved", leave });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+/* ─────────────────────────────────────────────────────────────
+   PUT /api/leaves/:id/cancel      (Faculty cancels own leave)
+   ✅ Restores balance if leave was approved
+   ───────────────────────────────────────────────────────────── */
+router.put("/:id/cancel", protect, async (req, res) => {
+  try {
+    const leave = await Leave.findById(req.params.id);
+    if (!leave) return res.status(404).json({ message: "Leave not found" });
+
+    // Only the faculty who applied can cancel
+    if (leave.faculty.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: "You can only cancel your own leave" });
+    }
+
+    if (leave.status === "rejected" || leave.status === "cancelled") {
+      return res.status(400).json({ message: "Leave is already rejected or cancelled" });
+    }
+
+    // ✅ If leave was approved, restore the balance
+    if (leave.status === "approved") {
+      const balKey = Leave.BALANCE_KEY_MAP[leave.leaveType];
+      if (balKey && TRACKED_LEAVE_TYPES.includes(leave.leaveType)) {
+        const deduction = getDeductionDays(leave);
+        await LeaveBalance.restoreBalance(leave.faculty, balKey, deduction);
+      }
+    }
+
+    leave.status = "cancelled";
+    await leave.save();
+
+    // Notify HOD and admin
+    const admins = await User.find({ role: { $in: ["admin", "hod"] } });
+    await Notification.insertMany(
+      admins.map((admin) => ({
+        recipient: admin._id,
+        sender: req.user._id,
+        type: "leave_applied",
+        message: `${req.user.name} cancelled their ${leave.leaveType} leave (${new Date(leave.startDate).toDateString()} → ${new Date(leave.endDate).toDateString()}).`,
+        relatedLeave: leave._id,
+      }))
+    );
+
+    res.json({ message: "Leave cancelled successfully", leave });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
