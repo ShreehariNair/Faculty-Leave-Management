@@ -11,8 +11,6 @@ const leaveTypeSchema = (defaultTotal) => ({
 });
 
 const getAcademicYearForDate = (dt = new Date()) => {
-  // Aug (7) .. Dec => current year
-  // Jan .. Jul => previous year
   return dt.getMonth() >= 7 ? dt.getFullYear() : dt.getFullYear() - 1;
 };
 
@@ -32,19 +30,42 @@ const leaveBalanceSchema = new mongoose.Schema(
     },
 
     /* ── Leave types per Pillai handbook ── */
-    casual: leaveTypeSchema(8), // CL — 8 days
-    medical: leaveTypeSchema(10), // ML — 10 days
-    earned: leaveTypeSchema(0), // EL — accrued
-    compensatory: leaveTypeSchema(0), // CO — admin/support only
-    onDuty: leaveTypeSchema(0), // OD — assigned duty
-    special: leaveTypeSchema(0), // SP — no pay
-    leaveWithoutPay: leaveTypeSchema(0), // LWP
+    casual: leaveTypeSchema(8),         // CL — 8 days
+    medical: leaveTypeSchema(10),       // ML — 10 days
+    earned: leaveTypeSchema(0),         // EL — accrued
+    compensatory: leaveTypeSchema(0),   // CO — admin/support only
+    onDuty: leaveTypeSchema(0),         // OD — assigned duty
+    special: leaveTypeSchema(0),        // SP — no pay
+    leaveWithoutPay: leaveTypeSchema(0),// LWP
 
     /* Doctor's certificate submitted for ML return */
     mlCertificateSubmitted: { type: Boolean, default: false },
   },
   { timestamps: true },
 );
+
+/* ── Virtuals: remaining days per leave type ── */
+leaveBalanceSchema.virtual("casual.remaining").get(function () {
+  return this.casual.total - this.casual.used;
+});
+leaveBalanceSchema.virtual("medical.remaining").get(function () {
+  return this.medical.total - this.medical.used;
+});
+leaveBalanceSchema.virtual("earned.remaining").get(function () {
+  return this.earned.total - this.earned.used;
+});
+leaveBalanceSchema.virtual("compensatory.remaining").get(function () {
+  return this.compensatory.total - this.compensatory.used;
+});
+leaveBalanceSchema.virtual("onDuty.remaining").get(function () {
+  return this.onDuty.total - this.onDuty.used;
+});
+leaveBalanceSchema.virtual("special.remaining").get(function () {
+  return this.special.total - this.special.used;
+});
+leaveBalanceSchema.virtual("leaveWithoutPay.remaining").get(function () {
+  return this.leaveWithoutPay.total - this.leaveWithoutPay.used;
+});
 
 /* ── Virtual: total days used across all leave types ── */
 leaveBalanceSchema.virtual("totalUsed").get(function () {
@@ -59,9 +80,11 @@ leaveBalanceSchema.virtual("totalUsed").get(function () {
   );
 });
 
+leaveBalanceSchema.set("toJSON", { virtuals: true });
+leaveBalanceSchema.set("toObject", { virtuals: true });
+
 /**
- * ✅ Reset balances for new academic year (Aug 1)
- * Note: EL does not carry forward => reset to 0.
+ * Reset balances for new academic year (Aug 1)
  */
 leaveBalanceSchema.methods.resetForNewYear = async function () {
   this.casual = { total: 8, used: 0 };
@@ -77,7 +100,7 @@ leaveBalanceSchema.methods.resetForNewYear = async function () {
 };
 
 /**
- * ✅ Ensure this document is for the current academic year.
+ * Ensure this document is for the current academic year.
  * If not, reset.
  */
 leaveBalanceSchema.methods.ensureCurrentAcademicYear = async function () {
@@ -89,7 +112,7 @@ leaveBalanceSchema.methods.ensureCurrentAcademicYear = async function () {
 };
 
 /**
- * ✅ Static helper: get or create balance and ensure it matches current academic year
+ * Static helper: get or create balance and ensure it matches current academic year
  */
 leaveBalanceSchema.statics.getOrCreateForUser = async function (userId) {
   let bal = await this.findOne({ faculty: userId });
@@ -97,6 +120,20 @@ leaveBalanceSchema.statics.getOrCreateForUser = async function (userId) {
     bal = await this.create({ faculty: userId });
   }
   await bal.ensureCurrentAcademicYear();
+  return bal;
+};
+
+/**
+ * NEW ✅ Static helper: restore (reverse) a deduction when leave is rejected/cancelled
+ * leaveType: the leave type string e.g. "casual"
+ * days: number of days to restore
+ */
+leaveBalanceSchema.statics.restoreBalance = async function (userId, leaveType, days) {
+  const bal = await this.getOrCreateForUser(userId);
+  if (bal[leaveType]) {
+    bal[leaveType].used = Math.max(0, bal[leaveType].used - days);
+    await bal.save();
+  }
   return bal;
 };
 
